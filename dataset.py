@@ -1,9 +1,7 @@
 import numpy as np 
 
-
-
 def get_dataset(root, dataset):
-	# noise-data
+    # noise-data
     data = np.load(root + '/' + dataset + '.npz')
     train_data = data['X_train']
     train_labels = data['y_train']
@@ -14,7 +12,7 @@ def get_dataset(root, dataset):
     clean_labels = clean_data['y_train']
 
     dataset_train, dataset_test = Train_Dataset(train_data, train_labels), \
-    		Train_Dataset(test_data, test_labels)
+            Train_Dataset(test_data, test_labels)
     return dataset_train, dataset_test, train_data, train_labels, clean_labels 
 
 

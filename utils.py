@@ -1,7 +1,6 @@
 import numpy as np
 
 
-
 def make_timestamp():
     ISO_TIMESTAMP = "%Y%m%d_%H%M%S"
     return datetime.datetime.now().strftime(ISO_TIMESTAMP)
@@ -9,10 +8,10 @@ def make_timestamp():
 
 # Augmentation 
 class MaskAug(object):
-	def __init__(self, ratio):
-		self.ratio = ratio
+    def __init__(self, ratio):
+        self.ratio = ratio
 
-	def __call__(self, x):
+    def __call__(self, x):
         prob = torch.zeros_like(x).fill_(self.ratio)
         mask = torch.bernoulli(prob)
         masked_x = mask * x
@@ -20,10 +19,10 @@ class MaskAug(object):
 
 
 class NoiseAug(object):
-	def __init__(self, ratio):
+    def __init__(self, ratio):
         self.ratio = ratio
 
-	def __call__(self, x):
+    def __call__(self, x):
         noise = torch.randn(x.size()) * self.ratio
         noise_x = x + noise 
         return noise_x
