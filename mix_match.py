@@ -9,8 +9,15 @@ from torch.utils.tensorboard import SummaryWriter
 import sys
 from sklearn.metrics import confusion_matrix
 
-from utils import AverageMeter
+from utils import AverageMeter, predict_softmax, predict_dataset_softmax
 from dataset import Train_Dataset, Semi_Labeled_Dataset, Semi_Unlabeled_Dataset
+
+
+class NegEntropy(object):
+    def __call__(self,outputs):
+        probs = torch.softmax(outputs, dim=1)
+        return torch.mean(torch.sum(probs.log()*probs, dim=1))
+
 
 class mix_match(object):
 
@@ -20,7 +27,6 @@ class mix_match(object):
         self.model = kwargs['model'].to(self.args.device)
         self.optimizer = kwargs['optimizer']
         self.scheduler = kwargs['scheduler']
-        self.writer = SummaryWriter(log_dir=kwargs['log_dir'])
 
         self.threshold = self.args.theta
         self.labeled_dist = torch.Tensor(kwargs['labeled_dist']).to(self.args.device)
@@ -52,7 +58,7 @@ class mix_match(object):
         unconfident_indexs = []
 
         for i in range(0, len(noisy_targets)):
-            if preds[i] == noisy_targets[i]:
+            if preds[i] == noisy_targets[i] and probs[i] > 0.95:
                 confident_indexs.append(i)
                 if clean_targets[i] == preds[i]:
                     confident_correct_num += 1
@@ -64,34 +70,43 @@ class mix_match(object):
         return confident_indexs, unconfident_indexs
 
 
-    def update_trainloader(self, train_data, clean_target, noisy_targets, transform_train):
+    def update_trainloader(self, train_loader, train_data, clean_targets, noisy_targets, transform_train):
 
-        predict_dataset = Semi_Unlabeled_Dataset(train_data, transform_train)
-        predict_loader = DataLoader(dataset=predict_dataset, batch_size=self.args.batch_size * 2, shuffle=False, num_workers=8, pin_memory=True, drop_last=False)
-        
-        soft_outs = predict_softmax(predict_loader, model)
+        # predict_dataset = Semi_Unlabeled_Dataset(train_data, transform_train)
+        # predict_loader =torch.utils.data.DataLoader(dataset=predict_dataset, batch_size=self.args.batch_size * 2, shuffle=False, num_workers=8, pin_memory=True, drop_last=False)
+        #
+        # soft_outs = predict_softmax(predict_loader, self.model, self.args.device)
+        soft_outs = predict_dataset_softmax(train_loader, self.model, self.args.device)
 
-        confident_indexs, unconfident_indexs = splite_confident(soft_outs, clean_targets, noisy_targets)
+        confident_indexs, unconfident_indexs = self.splite_confident(soft_outs, clean_targets, noisy_targets)
         confident_dataset = Semi_Labeled_Dataset(train_data[confident_indexs], noisy_targets[confident_indexs], transform_train)
         unconfident_dataset = Semi_Unlabeled_Dataset(train_data[unconfident_indexs], transform_train)
 
-        uncon_batch = int(self.args.batch_size / 2) if len(unconfident_indexs) > len(confident_indexs) else int(len(unconfident_indexs) / (len(confident_indexs) + len(unconfident_indexs)) * self.args.batch_size)
-        con_batch = self.args.batch_size - uncon_batch
+        # print confident set clean-ratio
+        clean_ratio = np.sum(noisy_targets[confident_indexs] == clean_targets[confident_indexs]) * 1.0 / len(confident_indexs)
+        print('clean ratio is %f' %clean_ratio)
 
-        labeled_trainloader = DataLoader(dataset=confident_dataset, batch_size=con_batch, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
-        unlabeled_trainloader = DataLoader(dataset=unconfident_dataset, batch_size=uncon_batch, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
+
+        # uncon_batch = int(self.args.batch_size / 2) if len(unconfident_indexs) > len(confident_indexs) else int(len(unconfident_indexs) / (len(confident_indexs) + len(unconfident_indexs)) * self.args.batch_size)
+        # con_batch = self.args.batch_size - uncon_batch
+        print('confident sz is %d unconfident sz is %d' %(len(confident_indexs), len(unconfident_indexs)))
+        uncon_batch = con_batch = self.args.batch_size
+
+        labeled_trainloader = torch.utils.data.DataLoader(dataset=confident_dataset, batch_size=con_batch, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
+        unlabeled_trainloader = torch.utils.data.DataLoader(dataset=unconfident_dataset, batch_size=uncon_batch, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
 
         return labeled_trainloader, unlabeled_trainloader
 
-    def run(self, train_data, clean_target, noisy_targets, transform_train, trainloader, testloader):
+    def run(self, train_data, clean_targets, noisy_targets, transform_train, trainloader, testloader):
 
         for i in range(self.args.epoch):
             if i < self.args.warmup:
                 self.warmup(i, trainloader)
             else:
-                labeled_trainloader, unlabeled_trainloader = self.update_trainloader(data, clean_labels, noisy_labels, transform_train)
+                labeled_trainloader, unlabeled_trainloader = self.update_trainloader(trainloader, train_data, clean_targets, noisy_targets, transform_train)
                 self.fixmatch_train(i, labeled_trainloader, unlabeled_trainloader)
             self.optimizer.step()
+            self.eval(testloader, i)
 
 
     def fixmatch_train(self, epoch, labeled_trainloader, unlabeled_trainloader):
@@ -114,21 +129,16 @@ class mix_match(object):
 
 
             inputs_x, inputs_x2 = inputs_x.to(self.args.device), inputs_x2.to(self.args.device)
-            labels_x = labels_x.to(self.args.device)
+            targets_x = targets_x.to(self.args.device)
             inputs_u, inputs_u2 = inputs_u.to(self.args.device), inputs_u2.to(self.args.device)
 
             batch_size = inputs_x.size(0)
 
-            inputs = interleave(
-                torch.cat((inputs_x, inputs_u, inputs_u2)), 2*self.args.mu+1).to(self.args.device)
-            
             targets_x = targets_x.to(self.args.device)
 
-            logits = model(inputs)
-            logits = de_interleave(logits, 2*self.args.mu+1)
-            logits_x = logits[:batch_size]
-            logits_u_w, logits_u_s = logits[batch_size:].chunk(2)
-            del logits
+            logits_x = self.model(inputs_x)
+            logits_u_w = self.model(inputs_u)
+            logits_u_s = self.model(inputs_u2)
 
             Lx = F.cross_entropy(logits_x, targets_x, reduction='mean')
 
@@ -141,20 +151,20 @@ class mix_match(object):
                                   reduction='none') * mask).mean()
 
             loss = Lx + self.args.lambda_u * Lu
-
+            loss.backward()
 
             losses.update(loss.item())
             losses_x.update(Lx.item())
             losses_u.update(Lu.item())
 
-            optimizer.step()
-            scheduler.step()
+            self.optimizer.step()
 
-            model.zero_grad()
+            self.model.zero_grad()
         print('Epoch [%3d/%3d] \t Losses: %.8f, Losses_x: %.8f Losses_u: %.8f'% (epoch, self.args.epoch, losses.avg, losses_x.avg, losses_u.avg))
 
 
     def warmup(self, epoch, trainloader):
+        self.model.train()
         batch_idx = 0
         num_iter = (len(trainloader.dataset) // self.args.batch_size) + 1
 
@@ -168,6 +178,7 @@ class mix_match(object):
             self.optimizer.zero_grad()
             loss = nn.CrossEntropyLoss()(logits, y)
             loss.backward()
+            self.optimizer.step()
             
             losses.update(loss.item(), len(logits))
             batch_idx += 1
@@ -192,12 +203,12 @@ class mix_match(object):
                 outputs = F.softmax(logits, dim=1)
                 _, pred = torch.max(outputs.data, 1)
 
-                total += labels.size(0)
-                correct += (pred.cpu() == labels.long()).sum()
+                total += y.size(0)
+                correct += (pred.cpu() == y.long()).sum()
 
                 # add pred1 | labels
                 model_preds.append(pred.cpu())
-                model_true.append(labels.long())
+                model_true.append(y.long())
 
         model_preds = np.concatenate(model_preds, axis=0)
         model_true = np.concatenate(model_true, axis=0)
@@ -207,4 +218,4 @@ class mix_match(object):
         class_acc = cm.diagonal()
 
         acc = 100 * float(correct) / float(total)
-        print('Epoch [%3d/%3d] Test Acc: %.d%%' %(epoch, self.args.epoch, acc))
+        print('Epoch [%3d/%3d] Test Acc: %.2f%%' %(epoch, self.args.epoch, acc))

@@ -8,6 +8,7 @@ from model import MLP_Net
 import torch.backends.cudnn as cudnn
 import torch
 from mix_match import mix_match
+import torch.nn as nn
 
 from os import path as osp
 from torch.utils.tensorboard import SummaryWriter
@@ -39,7 +40,7 @@ parser.add_argument('--gpu_index', type=int, default=0)
 
 
 # semi-superivsed setting
-parser.add_argument('--mu', default=7, type=int,
+parser.add_argument('--mu', default=1.0, type=int,
                         help='coefficient of unlabeled batch size')
 
 parser.add_argument('--lambda-u', default=1, type=float,
@@ -49,6 +50,9 @@ parser.add_argument('--T', default=1, type=float,
                         help='pseudo label temperature')
 
 parser.add_argument('--threshold', default=0.95, type=float,
+                        help='pseudo label threshold')
+
+parser.add_argument('--theta', default=0.95, type=float,
                         help='pseudo label threshold')
 
 args = parser.parse_args()
@@ -74,10 +78,11 @@ test_loader = torch.utils.data.DataLoader(
         test_dataset, batch_size=args.batch_size, shuffle=False,
         num_workers=args.num_workers, pin_memory=True, drop_last=False)
 
-transform_train = transforms.Compose([MaskAug(0.7), NoiseAug(0.5)])
+transform_train = transforms.Compose([MaskAug(1.0)])
 
 
-model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=None)
+model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=nn.BatchNorm1d)
+print(model)
 
 if args.optimizer == 'adam':
     optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.weight_decay)
@@ -104,6 +109,6 @@ labeled_dist = np.array(labeled_dist)
 
 with torch.cuda.device(args.gpu_index):
     mixmatch = mix_match(model=model, optimizer=optimizer, scheduler=lr_scheduler,
-                         log_dir=SAVE_DIR, args=args, labeled_dist=labeled_dist)
-    mixmatch.run(train_data, clean_target, noise_target, transform_train, \
+                         args=args, labeled_dist=labeled_dist)
+    mixmatch.run(train_data, clean_targets, noisy_targets, transform_train, \
                  train_loader, test_loader)

@@ -1,4 +1,6 @@
-import numpy as np 
+import numpy as np
+import torchvision.transforms as transforms
+from torch.utils.data import Dataset, DataLoader
 
 def get_dataset(root, dataset):
     # noise-data
@@ -8,7 +10,7 @@ def get_dataset(root, dataset):
     test_data = data['X_test']
     test_labels = data['y_test']
     # clean-data
-    clean_data = np.load(root + '/' + dataset +'_clean.npz')
+    clean_data = np.load(root + '/' + dataset +'_true.npz')
     clean_labels = clean_data['y_train']
 
     dataset_train, dataset_test = Train_Dataset(train_data, train_labels), \
@@ -21,12 +23,10 @@ class Train_Dataset(Dataset):
         self.train_data = np.array(data)
         self.train_labels = np.array(labels)
         self.length = len(self.train_labels)
+
+        self.transform = transform
         self.target_transform = target_transform
 
-        if transform is None:
-            self.transform = transforms.ToTensor()
-        else:
-            self.transform = transform
 
     def __getitem__(self, index):
         img, target = self.train_data[index], self.train_labels[index]
@@ -53,10 +53,7 @@ class Semi_Labeled_Dataset(Dataset):
         self.length = len(self.train_labels)
         self.target_transform = target_transform
 
-        if transform is None:
-            self.transform = transforms.ToTensor()
-        else:
-            self.transform = transform
+        self.transform = transform
 
     def __getitem__(self, index):
         img, target = self.train_data[index], self.train_labels[index]
