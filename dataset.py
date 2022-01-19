@@ -15,7 +15,7 @@ def get_dataset(root, dataset):
 
     dataset_train, dataset_test = Train_Dataset(train_data, train_labels), \
             Train_Dataset(test_data, test_labels)
-    return dataset_train, dataset_test, train_data, train_labels, clean_labels 
+    return dataset_train, dataset_test, train_data, train_labels, clean_labels
 
 
 class Train_Dataset(Dataset):
@@ -47,25 +47,14 @@ class Train_Dataset(Dataset):
 
 
 class Semi_Labeled_Dataset(Dataset):
-    def __init__(self, data, labels, transform=None, target_transform=None):
+    def __init__(self, data, labels):
         self.train_data = np.array(data)
         self.train_labels = np.array(labels)
         self.length = len(self.train_labels)
-        self.target_transform = target_transform
-
-        self.transform = transform
 
     def __getitem__(self, index):
         img, target = self.train_data[index], self.train_labels[index]
-
-        if self.transform is not None:
-            out1 = self.transform(img)
-            out2 = self.transform(img)
-
-        if self.target_transform is not None:
-            target = self.target_transform(target)
-
-        return out1, out2, target
+        return img, target
 
     def __len__(self):
         return self.length
@@ -75,23 +64,13 @@ class Semi_Labeled_Dataset(Dataset):
 
 
 class Semi_Unlabeled_Dataset(Dataset):
-    def __init__(self, data, transform=None):
+    def __init__(self, data):
         self.train_data = np.array(data)
         self.length = self.train_data.shape[0]
 
-        if transform is None:
-            self.transform = transforms.ToTensor()
-        else:
-            self.transform = transform
-
     def __getitem__(self, index):
         img = self.train_data[index]
-
-        if self.transform is not None:
-            out1 = self.transform(img)
-            out2 = self.transform(img)
-
-        return out1, out2
+        return img
 
     def __len__(self):
         return self.length

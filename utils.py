@@ -20,11 +20,11 @@ class MaskAug(object):
         return np.float32(masked_x)
 
 class NoiseAug(object):
-    def __init__(self, ratio):
-        self.ratio = ratio
+    def __init__(self, sigma):
+        self.sigma = sigma
 
     def __call__(self, x):
-        noise = np.random.rand(x.shape[0]) * self.ratio
+        noise = np.random.normal(0, self.sigma, x.shape[0])
         noise_x = x + noise
         return np.float32(noise_x)
 

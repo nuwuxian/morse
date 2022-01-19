@@ -12,15 +12,30 @@ import torch.nn as nn
 
 from os import path as osp
 from torch.utils.tensorboard import SummaryWriter
-
+from torch.optim.lr_scheduler import LambdaLR
+import math
 from utils import MaskAug, NoiseAug
 
+
+def get_cosine_schedule_with_warmup(optimizer,
+                                    num_warmup_steps,
+                                    num_training_steps,
+                                    num_cycles=7./16.,
+                                    last_epoch=-1):
+    def _lr_lambda(current_step):
+        if current_step < num_warmup_steps:
+            return float(current_step) / float(max(1, num_warmup_steps))
+        no_progress = float(current_step - num_warmup_steps) / \
+            float(max(1, num_training_steps - num_warmup_steps))
+        return max(0., math.cos(math.pi * num_cycles * no_progress))
+
+    return LambdaLR(optimizer, _lr_lambda, last_epoch)
 
 parser = argparse.ArgumentParser()
 
 
 parser.add_argument('--lr', type=float, default=1e-3)
-parser.add_argument('--batch_size', type=int, default=128)
+parser.add_argument('--batch_size', type=int, default=64)
 parser.add_argument('--momentum', type=float, default=0.9)
 parser.add_argument('--weight_decay', type=float, default=2e-4)
 parser.add_argument('--input_dim', type=int, default=1024)
@@ -78,11 +93,8 @@ test_loader = torch.utils.data.DataLoader(
         test_dataset, batch_size=args.batch_size, shuffle=False,
         num_workers=args.num_workers, pin_memory=True, drop_last=False)
 
-transform_train = transforms.Compose([MaskAug(1.0)])
-
 
 model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=nn.BatchNorm1d)
-print(model)
 
 if args.optimizer == 'adam':
     optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.weight_decay)
@@ -91,7 +103,7 @@ else:
                                 weight_decay=args.weight_decay)
 
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-            milestones=[30, 60], gamma=0.1, last_epoch=-1)
+            milestones=[30, 60], gamma=0.9, last_epoch=-1)
 
 # check if gpu training is available
 if torch.cuda.is_available():
@@ -110,5 +122,5 @@ labeled_dist = np.array(labeled_dist)
 with torch.cuda.device(args.gpu_index):
     mixmatch = mix_match(model=model, optimizer=optimizer, scheduler=lr_scheduler,
                          args=args, labeled_dist=labeled_dist)
-    mixmatch.run(train_data, clean_targets, noisy_targets, transform_train, \
+    mixmatch.run(train_data, clean_targets, noisy_targets, \
                  train_loader, test_loader)

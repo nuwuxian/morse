@@ -34,17 +34,28 @@ class mix_match(object):
         self.class_threshold = self.labeled_dist * self.threshold / max(self.labeled_dist)
         self.class_threshold = torch.Tensor(self.class_threshold).to(self.args.device)
 
+    def aug(self, input, mask_ratio):
+        # idx = torch.randperm(input.size()[0])
+        # prob = torch.zeros_like(input).fill_(mask_ratio)
+        # mask = torch.bernoulli(prob)
+        # aug_input = mask * input + (1 - mask) * input[idx, :]
+        # return aug_input
+        prob = torch.zeros_like(input).fill_(mask_ratio)
+        m = torch.bernoulli(prob)
+        no, dim = input.shape
+        # Randomly (and column-wise) shuffle data
+        x_bar = np.zeros([no, dim])
+        for i in range(dim):
+            idx = np.random.permutation(no)
+            x_bar[:, i] = input[idx, i]
+        x_bar = torch.Tensor(x_bar)
 
-    def interleave(self, x, size):
-        s = list(x.shape)
-        return x.reshape([-1, size] + s[1:]).transpose(0, 1).reshape([-1] + s[1:])
+        # Corrupt samples
+        x_tilde = input * m + x_bar * (1 - m)
+        return x_tilde
 
 
-    def de_interleave(self, x, size):
-        s = list(x.shape)
-        return x.reshape([size, -1] + s[1:]).transpose(0, 1).reshape([-1] + s[1:])
-
-    # mix-up
+        # mix-up
     def mixup_criterion(self, criterion, pred, y_a, y_b, lam):
         return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
@@ -70,40 +81,33 @@ class mix_match(object):
         return confident_indexs, unconfident_indexs
 
 
-    def update_trainloader(self, train_loader, train_data, clean_targets, noisy_targets, transform_train):
+    def update_trainloader(self, train_loader, train_data, clean_targets, noisy_targets):
 
-        # predict_dataset = Semi_Unlabeled_Dataset(train_data, transform_train)
-        # predict_loader =torch.utils.data.DataLoader(dataset=predict_dataset, batch_size=self.args.batch_size * 2, shuffle=False, num_workers=8, pin_memory=True, drop_last=False)
-        #
-        # soft_outs = predict_softmax(predict_loader, self.model, self.args.device)
         soft_outs = predict_dataset_softmax(train_loader, self.model, self.args.device)
 
         confident_indexs, unconfident_indexs = self.splite_confident(soft_outs, clean_targets, noisy_targets)
-        confident_dataset = Semi_Labeled_Dataset(train_data[confident_indexs], noisy_targets[confident_indexs], transform_train)
-        unconfident_dataset = Semi_Unlabeled_Dataset(train_data[unconfident_indexs], transform_train)
+        confident_dataset = Semi_Labeled_Dataset(train_data[confident_indexs], noisy_targets[confident_indexs])
+        unconfident_dataset = Semi_Unlabeled_Dataset(train_data[unconfident_indexs])
 
         # print confident set clean-ratio
         clean_ratio = np.sum(noisy_targets[confident_indexs] == clean_targets[confident_indexs]) * 1.0 / len(confident_indexs)
         print('clean ratio is %f' %clean_ratio)
-
-
-        # uncon_batch = int(self.args.batch_size / 2) if len(unconfident_indexs) > len(confident_indexs) else int(len(unconfident_indexs) / (len(confident_indexs) + len(unconfident_indexs)) * self.args.batch_size)
-        # con_batch = self.args.batch_size - uncon_batch
         print('confident sz is %d unconfident sz is %d' %(len(confident_indexs), len(unconfident_indexs)))
-        uncon_batch = con_batch = self.args.batch_size
+        uncon_batch = 6 * self.args.batch_size
+        con_batch = self.args.batch_size
 
         labeled_trainloader = torch.utils.data.DataLoader(dataset=confident_dataset, batch_size=con_batch, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
         unlabeled_trainloader = torch.utils.data.DataLoader(dataset=unconfident_dataset, batch_size=uncon_batch, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
 
         return labeled_trainloader, unlabeled_trainloader
 
-    def run(self, train_data, clean_targets, noisy_targets, transform_train, trainloader, testloader):
+    def run(self, train_data, clean_targets, noisy_targets, trainloader, testloader):
 
         for i in range(self.args.epoch):
             if i < self.args.warmup:
                 self.warmup(i, trainloader)
             else:
-                labeled_trainloader, unlabeled_trainloader = self.update_trainloader(trainloader, train_data, clean_targets, noisy_targets, transform_train)
+                labeled_trainloader, unlabeled_trainloader = self.update_trainloader(trainloader, train_data, clean_targets, noisy_targets)
                 self.fixmatch_train(i, labeled_trainloader, unlabeled_trainloader)
             self.optimizer.step()
             self.eval(testloader, i)
@@ -119,21 +123,22 @@ class mix_match(object):
         losses_x = AverageMeter()
         losses_u = AverageMeter()
 
-        for batch_idx, (inputs_x, inputs_x2, targets_x) in enumerate(labeled_trainloader):
+        for batch_idx, (inputs_x, targets_x) in enumerate(labeled_trainloader):
 
             try:
-                inputs_u, inputs_u2 = unlabeled_train_iter.next()
+                inputs_u  = unlabeled_train_iter.next()
             except:
                 unlabeled_train_iter = iter(unlabeled_trainloader)
-                inputs_u, inputs_u2 = unlabeled_train_iter.next()
+                inputs_u  = unlabeled_train_iter.next()
 
-
-            inputs_x, inputs_x2 = inputs_x.to(self.args.device), inputs_x2.to(self.args.device)
+            inputs_x, inputs_u = inputs_x.to(self.args.device), inputs_u.to(self.args.device)
+            inputs_x = self.aug(inputs_x, 0.9)
+            inputs_u1 = self.aug(inputs_u, 0.9)
             targets_x = targets_x.to(self.args.device)
-            inputs_u, inputs_u2 = inputs_u.to(self.args.device), inputs_u2.to(self.args.device)
 
-            batch_size = inputs_x.size(0)
-
+            # weak-augment inputs_x, inputs_u
+            inputs_u2 = self.aug(inputs_u, 0.7)
+            inputs_u = inputs_u1
             targets_x = targets_x.to(self.args.device)
 
             logits_x = self.model(inputs_x)
