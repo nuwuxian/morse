@@ -74,7 +74,7 @@ class mix_match(object):
 
         return labeled_indexs, unlabeled_indexs
 
-    def update_trainloader(self, train_loader, train_data, clean_targets, noisy_targets):
+    def update_loader(self, train_loader, train_data, clean_targets, noisy_targets):
 
         soft_outs = predict_dataset_softmax(train_loader, self.model, self.args.device)
 
@@ -94,13 +94,24 @@ class mix_match(object):
         l_batch = self.args.batch_size
         u_batch = int(self.args.batch_size * min(6,  unlabeled_num * 1.0 / labeled_num))
 
-        labeled_trainloader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=True, \
-                                         num_workers=8, pin_memory=True, drop_last=True)
+        labeled_sampler = BatchSampler(RandomSampler(
+            labeled_dataset, replacement=True, num_samples=self.args.num_iters*l_batch),
+            batch_size=l_batch, drop_last=True)
+        unlabeled_sampler = BatchSampler(RandomSampler(
+            unlabeled_dataset, replacement=True, num_samples=self.args.num_iters*u_batch),
+            batch_size=u_batch, drop_last=True)
 
-        unlabeled_trainloader = DataLoader(dataset=unlabeled_dataset, batch_size=u_batch, shuffle=True, \
-                                           num_workers=8, pin_memory=True, drop_last=True)
+        labeled_loader = DataLoader(
+            labeled_dataset, batch_sampler=labeled_sampler, num_workers=self.args.num_workers,
+            worker_init_fn=lambda i: np.random.seed(torch.initial_seed() % 2**32 + i),
+            pin_memory=True)
+        
+        unlabeled_loader = DataLoader(
+            unlabeled_dataset, batch_sampler=unlabeled_sampler, num_workers=self.args.num_workers,
+            worker_init_fn=lambda i: np.random.seed(torch.initial_seed() % 2**32 + self.num_workers + i),
+            pin_memory=True)
 
-        return labeled_trainloader, unlabeled_trainloader
+        return labeled_loader, unlabeled_loader
 
     def run(self, train_data, clean_targets, noisy_targets, trainloader, testloader):
 
@@ -109,7 +120,7 @@ class mix_match(object):
                 self.warmup(i, trainloader)
             else:
                 
-                labeled_trainloader, unlabeled_trainloader = self.update_trainloader(trainloader, train_data, clean_targets, noisy_targets)
+                labeled_trainloader, unlabeled_trainloader = self.update_loader(trainloader, train_data, clean_targets, noisy_targets)
                 self.fixmatch_train(i, labeled_trainloader, unlabeled_trainloader)
 
                 self.update_cnt += 1

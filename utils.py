@@ -8,25 +8,49 @@ def make_timestamp():
     return datetime.datetime.now().strftime(ISO_TIMESTAMP)
 
 
-# Augmentation 
-class MaskAug(object):
-    def __init__(self, ratio):
-        self.ratio = ratio
 
-    def __call__(self, x):
-        len = x.shape[0]
-        mask = np.random.binomial(1, p=self.ratio, size=len)
-        masked_x = mask * x
-        return np.float32(masked_x)
+# Cosine learning rate scheduler.
+#
+# From https://github.com/valencebond/FixMatch_pytorch/blob/master/lr_scheduler.py
+class WarmupCosineLrScheduler(torch.optim.lr_scheduler._LRScheduler):
+    def __init__(
+            self,
+            optimizer,
+            max_iter,
+            warmup_iter,
+            warmup_ratio=5e-4,
+            warmup='exp',
+            last_epoch=-1,
+    ):
+        self.max_iter = max_iter
+        self.warmup_iter = warmup_iter
+        self.warmup_ratio = warmup_ratio
+        self.warmup = warmup
+        super(WarmupCosineLrScheduler, self).__init__(optimizer, last_epoch)
 
-class NoiseAug(object):
-    def __init__(self, sigma):
-        self.sigma = sigma
+    def get_lr(self):
+        ratio = self.get_lr_ratio()
+        lrs = [ratio * lr for lr in self.base_lrs]
+        return lrs
 
-    def __call__(self, x):
-        noise = np.random.normal(0, self.sigma, x.shape[0])
-        noise_x = x + noise
-        return np.float32(noise_x)
+    def get_lr_ratio(self):
+        if self.last_epoch < self.warmup_iter:
+            ratio = self.get_warmup_ratio()
+        else:
+            real_iter = self.last_epoch - self.warmup_iter
+            real_max_iter = self.max_iter - self.warmup_iter
+            ratio = np.cos((7 * np.pi * real_iter) / (16 * real_max_iter))
+        return ratio
+
+    def get_warmup_ratio(self):
+        assert self.warmup in ('linear', 'exp')
+        alpha = self.last_epoch / self.warmup_iter
+        if self.warmup == 'linear':
+            ratio = self.warmup_ratio + (1 - self.warmup_ratio) * alpha
+        elif self.warmup == 'exp':
+            ratio = self.warmup_ratio ** (1. - alpha)
+        return ratio
+
 
 
 class AverageMeter(object):
