@@ -24,9 +24,12 @@ parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--batch_size', type=int, default=64)
 parser.add_argument('--batches_per_epoch', type=int, defalut=100)
 
-
 parser.add_argument('--momentum', type=float, default=0.9)
 parser.add_argument('--weight_decay', type=float, default=2e-4)
+
+parser.add_argument('--nesterov', action='store_true', default=True,
+                        help='use nesterov momentum')
+
 parser.add_argument('--input_dim', type=int, default=1024)
 
 parser.add_argument('--gamma', type=float, default=0.95, metavar='M',help='Learning rate step gamma (default: 0.7)')
@@ -84,19 +87,24 @@ test_loader = torch.utils.data.DataLoader(
         test_dataset, batch_size=args.batch_size, shuffle=False,
         num_workers=args.num_workers, pin_memory=True, drop_last=False)
 
-
 model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=nn.BatchNorm1d)
 
+# parameters
+no_decay = ['bias', 'bn']
+grouped_parameters = [
+    {'params': [p for n, p in model.named_parameters() if not any(
+        nd in n for nd in no_decay)], 'weight_decay': args.wdecay},
+    {'params': [p for n, p in model.named_parameters() if any(
+        nd in n for nd in no_decay)], 'weight_decay': 0.0}
+]
+
 if args.optimizer == 'adam':
-    optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(grouped_parameters, args.lr, weight_decay=args.weight_decay)
 else:
-    optimizer = torch.optim.SGD(model.parameters(), args.lr, momentum=args.momentum,
-                                weight_decay=args.weight_decay)
-
-
+    optimizer = torch.optim.SGD(grouped_parameters, args.lr, momentum=args.momentum,
+                                weight_decay=args.weight_decay, nesterov=args.nesterov)
 # Cosin Learning Rates
 scheduler = partial(WarmupCosineLrScheduler, warmup_iter=0, max_iter=num_batches)
-
 
 # check if gpu training is available
 if torch.cuda.is_available():

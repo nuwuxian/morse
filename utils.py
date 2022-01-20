@@ -8,7 +8,6 @@ def make_timestamp():
     return datetime.datetime.now().strftime(ISO_TIMESTAMP)
 
 
-
 # Cosine learning rate scheduler.
 #
 # From https://github.com/valencebond/FixMatch_pytorch/blob/master/lr_scheduler.py
