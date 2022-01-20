@@ -17,20 +17,6 @@ import math
 from utils import MaskAug, NoiseAug
 
 
-def get_cosine_schedule_with_warmup(optimizer,
-                                    num_warmup_steps,
-                                    num_training_steps,
-                                    num_cycles=7./16.,
-                                    last_epoch=-1):
-    def _lr_lambda(current_step):
-        if current_step < num_warmup_steps:
-            return float(current_step) / float(max(1, num_warmup_steps))
-        no_progress = float(current_step - num_warmup_steps) / \
-            float(max(1, num_training_steps - num_warmup_steps))
-        return max(0., math.cos(math.pi * num_cycles * no_progress))
-
-    return LambdaLR(optimizer, _lr_lambda, last_epoch)
-
 parser = argparse.ArgumentParser()
 
 
@@ -67,8 +53,6 @@ parser.add_argument('--T', default=1, type=float,
 parser.add_argument('--threshold', default=0.95, type=float,
                         help='pseudo label threshold')
 
-parser.add_argument('--theta', default=0.95, type=float,
-                        help='pseudo label threshold')
 
 args = parser.parse_args()
 root = './data'
@@ -102,6 +86,8 @@ else:
     optimizer = torch.optim.SGD(model.parameters(), args.lr, momentum=args.momentum,
                                 weight_decay=args.weight_decay)
 
+
+# Cosin Learning Rates
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
             milestones=[30, 60], gamma=0.9, last_epoch=-1)
 
