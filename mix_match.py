@@ -94,20 +94,13 @@ class mix_match(object):
         l_batch = self.args.batch_size
         u_batch = int(self.args.batch_size * min(6,  unlabeled_num * 1.0 / labeled_num))
 
-        labeled_sampler = BatchSampler(RandomSampler(
-            labeled_dataset, replacement=True, num_samples=self.args.num_iters*l_batch),
-            batch_size=l_batch, drop_last=True)
-        unlabeled_sampler = BatchSampler(RandomSampler(
-            unlabeled_dataset, replacement=True, num_samples=self.args.num_iters*u_batch),
-            batch_size=u_batch, drop_last=True)
-
         labeled_loader = DataLoader(
-            labeled_dataset, batch_sampler=labeled_sampler, num_workers=self.args.num_workers,
+            labeled_dataset, batch_size=l_batch, num_workers=self.args.num_workers,
             worker_init_fn=lambda i: np.random.seed(torch.initial_seed() % 2**32 + i),
             pin_memory=True)
         
         unlabeled_loader = DataLoader(
-            unlabeled_dataset, batch_sampler=unlabeled_sampler, num_workers=self.args.num_workers,
+            unlabeled_dataset, batch_size=u_batch, num_workers=self.args.num_workers,
             worker_init_fn=lambda i: np.random.seed(torch.initial_seed() % 2**32 + self.args.num_workers + i),
             pin_memory=True)
 
@@ -119,7 +112,6 @@ class mix_match(object):
             if i < self.args.warmup:
                 self.warmup(i, trainloader)
             else:
-                
                 labeled_trainloader, unlabeled_trainloader = self.update_loader(trainloader, train_data, clean_targets, noisy_targets)
                 self.fixmatch_train(i, labeled_trainloader, unlabeled_trainloader)
 

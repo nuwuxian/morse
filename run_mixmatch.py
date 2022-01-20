@@ -22,7 +22,6 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--batch_size', type=int, default=64)
-parser.add_argument('--batches_per_epoch', type=int, default=10)
 
 parser.add_argument('--momentum', type=float, default=0.9)
 parser.add_argument('--weight_decay', type=float, default=2e-4)
@@ -61,9 +60,6 @@ parser.add_argument('--threshold', default=0.95, type=float,
 
 
 args = parser.parse_args()
-
-args.num_iters = args.batches_per_epoch
-
 root = './data'
 dataset = args.dataset
 os.environ["CUDA_VISIBLE_DEVICES"] = str(args.cuda)
@@ -74,7 +70,6 @@ learning_rate = args.lr
 input_dim = args.input_dim
 
 num_classes = args.num_class
-num_batches = args.num_iters
 
 train_dataset, test_dataset, train_data, noisy_targets, \
                 clean_targets = get_dataset(root, args.dataset)
@@ -104,7 +99,7 @@ else:
     optimizer = torch.optim.SGD(grouped_parameters, args.lr, momentum=args.momentum,
                                 weight_decay=args.weight_decay, nesterov=args.nesterov)
 # Cosin Learning Rates
-lr_scheduler = partial(WarmupCosineLrScheduler, warmup_iter=0, max_iter=num_batches)
+lr_scheduler = partial(WarmupCosineLrScheduler, warmup_iter=0, max_iter=args.epoch-args.warmup)
 
 # check if gpu training is available
 if torch.cuda.is_available():
