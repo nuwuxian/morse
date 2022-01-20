@@ -11,8 +11,8 @@ from sklearn.metrics import confusion_matrix
 
 from utils import AverageMeter, predict_softmax, predict_dataset_softmax
 from dataset import Train_Dataset, Semi_Labeled_Dataset, Semi_Unlabeled_Dataset
+from torch.utils.data import BatchSampler, RandomSampler
 from torch.utils.data import DataLoader
-
 
 class mix_match(object):
 
@@ -25,7 +25,7 @@ class mix_match(object):
 
         self.threshold = self.args.threshold
         # tensorboard writer
-        self.writer = SummaryWriter(log_dir=kwargs['log_dir'])
+        self.writer = SummaryWriter()
         self.update_cnt = 0
 
     def aug(self, input, aug_type):
@@ -79,7 +79,7 @@ class mix_match(object):
         soft_outs = predict_dataset_softmax(train_loader, self.model, self.args.device)
 
         labeled_indexs, unlabeled_indexs = self.splite_confident(soft_outs, clean_targets, noisy_targets)
-        labeled_dataset = Semi_Labeled_Dataset(train_data[labeled_indexs], noisy_targets[unlabeled_indexs])
+        labeled_dataset = Semi_Labeled_Dataset(train_data[labeled_indexs], noisy_targets[labeled_indexs])
         unlabeled_dataset = Semi_Unlabeled_Dataset(train_data[unlabeled_indexs])
 
         labeled_num, unlabeled_num = len(labeled_indexs), len(unlabeled_indexs)
@@ -108,7 +108,7 @@ class mix_match(object):
         
         unlabeled_loader = DataLoader(
             unlabeled_dataset, batch_sampler=unlabeled_sampler, num_workers=self.args.num_workers,
-            worker_init_fn=lambda i: np.random.seed(torch.initial_seed() % 2**32 + self.num_workers + i),
+            worker_init_fn=lambda i: np.random.seed(torch.initial_seed() % 2**32 + self.args.num_workers + i),
             pin_memory=True)
 
         return labeled_loader, unlabeled_loader
@@ -140,7 +140,7 @@ class mix_match(object):
         for batch_idx, (b_l, b_u) in enumerate(zip(labeled_trainloader, unlabeled_trainloader)):
             # unpack b_l, b_u
             inputs_x, targets_x = b_l
-            inputs_u = bu
+            inputs_u = b_u
 
             inputs_x, inputs_u = inputs_x.to(self.args.device), inputs_u.to(self.args.device)
             inputs_x = self.aug(inputs_x, 'weak')
