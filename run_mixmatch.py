@@ -10,18 +10,13 @@ import torch
 from mix_match import mix_match
 import torch.nn as nn
 
-from os import path as osp
 from torch.utils.tensorboard import SummaryWriter
-from torch.optim.lr_scheduler import LambdaLR
-from utils import WarmupCosineLrScheduler
-
-from functools import partial
 
 parser = argparse.ArgumentParser()
 
 
 parser.add_argument('--lr', type=float, default=1e-3)
-parser.add_argument('--batch_size', type=int, default=64)
+parser.add_argument('--batch_size', type=int, default=128)
 
 parser.add_argument('--momentum', type=float, default=0.9)
 parser.add_argument('--weight_decay', type=float, default=2e-4)
@@ -52,7 +47,7 @@ parser.add_argument('--mu', default=1.0, type=int,
 parser.add_argument('--lambda-u', default=1, type=float,
                         help='coefficient of unlabeled loss')
 
-parser.add_argument('--T', default=1, type=float,
+parser.add_argument('--T', default=0.5, type=float,
                         help='pseudo label temperature')
 
 parser.add_argument('--threshold', default=0.95, type=float,
@@ -84,22 +79,14 @@ test_loader = torch.utils.data.DataLoader(
 
 model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=nn.BatchNorm1d)
 
-# parameters
-no_decay = ['bias', 'bn']
-grouped_parameters = [
-    {'params': [p for n, p in model.named_parameters() if not any(
-        nd in n for nd in no_decay)], 'weight_decay': args.weight_decay},
-    {'params': [p for n, p in model.named_parameters() if any(
-        nd in n for nd in no_decay)], 'weight_decay': 0.0}
-]
-
 if args.optimizer == 'adam':
-    optimizer = torch.optim.Adam(grouped_parameters, args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.weight_decay)
 else:
-    optimizer = torch.optim.SGD(grouped_parameters, args.lr, momentum=args.momentum,
+    optimizer = torch.optim.SGD(model.parameters(), args.lr, momentum=args.momentum,
                                 weight_decay=args.weight_decay, nesterov=args.nesterov)
 # Cosin Learning Rates
-lr_scheduler = partial(WarmupCosineLrScheduler, warmup_iter=0, max_iter=args.epoch-args.warmup)
+lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
+            milestones=[30, 60], gamma=0.9, last_epoch=-1)
 
 # check if gpu training is available
 if torch.cuda.is_available():

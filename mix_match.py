@@ -92,17 +92,13 @@ class mix_match(object):
         self.writer.add_scalar('Labeled_num', labeled_num, global_step=self.update_cnt)
 
         l_batch = self.args.batch_size
-        u_batch = int(self.args.batch_size * min(6,  unlabeled_num * 1.0 / labeled_num))
-
-        labeled_loader = DataLoader(
-            labeled_dataset, batch_size=l_batch, num_workers=self.args.num_workers,
-            worker_init_fn=lambda i: np.random.seed(torch.initial_seed() % 2**32 + i),
-            pin_memory=True)
-        
-        unlabeled_loader = DataLoader(
-            unlabeled_dataset, batch_size=u_batch, num_workers=self.args.num_workers,
-            worker_init_fn=lambda i: np.random.seed(torch.initial_seed() % 2**32 + self.args.num_workers + i),
-            pin_memory=True)
+        #u_batch = int(self.args.batch_size * min(6,  unlabeled_num * 1.0 / labeled_num))
+        u_batch = self.args.batch_size * 6
+        labeled_loader = torch.utils.data.DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=True,
+                                                          num_workers=8, pin_memory=True, drop_last=True)
+        unlabeled_loader = torch.utils.data.DataLoader(dataset=unlabeled_dataset, batch_size=u_batch,
+                                                            shuffle=True, num_workers=8, pin_memory=True,
+                                                            drop_last=True)
 
         return labeled_loader, unlabeled_loader
 
@@ -118,7 +114,6 @@ class mix_match(object):
                 self.update_cnt += 1
 
             self.scheduler.step()
-            
             self.eval(testloader, i)
 
     def fixmatch_train(self, epoch, labeled_trainloader, unlabeled_trainloader):
