@@ -117,7 +117,7 @@ class mix_match(object):
 
                 self.update_cnt += 1
 
-            self.optimizer.step()
+            self.scheduler.step()
             
             self.eval(testloader, i)
 
