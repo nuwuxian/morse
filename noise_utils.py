@@ -1,15 +1,11 @@
 from __future__ import print_function
 import os
 import os.path
-import copy
 import hashlib
 import errno
 import numpy as np
 from numpy.testing import assert_array_almost_equal
-
-import random
 import torch
-import numpy as np
 
 def solver(noise_rate, imb_type='step', imb_ratio=0.1, max_num=5000, num_class=10):
     from scipy import optimize
@@ -266,48 +262,6 @@ def noisify_multiclass_symmetric(y_train, noise, random_state=None, nb_classes=1
 
     return y_train, actual_noise, P
 
-def noisify_sparse(y_train, noise, random_state=None, nb_classes=10, select_class=10):
-    # init the matrix
-    P = np.zeros((nb_classes, nb_classes))
-    n = noise
-
-    if imb_type == 'none':
-        for i in range(nb_classes):
-            P[i, i] = 1 - n
-            m = n / (select_class - 1)
-            for j in range(i + 1, i + select_class):
-                j = j % (nb_classes)
-                P[j, i] = m
-    elif imb_type == 'step':
-        num_c = nb_classes / 2
-        for i in range(num_c):
-            P[i, i] = 1 - n 
-            j = (i + 1) % num_c 
-            P[j, i] = n
-        for i in range(num_c, nb_classes):
-            P[i, i] = 1 - n 
-            j = num if i + 1 == nb_classes else i + 1
-            P[j, i] = n
-
-    elif imb_type == 'exp':
-        for i in range(5):
-            p[2 * i, 2 * i] = 1 - n
-            p[2 * i, 2 * i + 1] =  n
-            p[2 * i + 1, 2 * i] = n
-            p[2 * i + 1, 2 * i + 1] = 1 - n
-
-    y_train_noisy = multiclass_noisify(y_train, P=P,
-                    random_state=random_state)
-    
-    actual_noise = (y_train_noisy != y_train).mean()
-    assert actual_noise > 0.0
-    print('Actual noise %.2f' % actual_noise)
-    y_train = y_train_noisy
-    print(P)
-
-    return y_train, actual_noise, P
-
-
 # imb_noisify
 def noisify_imb(y_train, noise, random_state=None, nb_classes=10, imb_type='step', imb_rate=0.1):
     # init the matrix
@@ -330,8 +284,6 @@ def noisify(dataset='mnist', nb_classes=10, train_labels=None, noise_type=None, 
         train_noisy_labels, actual_noise_rate, P = noisify_pairflip(train_labels, noise_rate, random_state=0, nb_classes=nb_classes)
     if noise_type == 'symmetric':
         train_noisy_labels, actual_noise_rate, P = noisify_multiclass_symmetric(train_labels, noise_rate, random_state=0, nb_classes=nb_classes)
-    if noise_type == 'sparse':
-        train_noisy_labels, actual_noise_rate, P = noisify_sparse(train_labels, noise_rate, random_state=0, nb_classes=nb_classes, select_class=select_class)
     if 'imb' in noise_type:
         imb_type = noise_type.split('_')[1]
         imb_rate = float(noise_type.split('_')[2])

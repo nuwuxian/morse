@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 import sys
 from sklearn.metrics import confusion_matrix
 
-from utils import AverageMeter, predict_softmax, predict_dataset_softmax
+from utils import AverageMeter, predict_dataset_softmax
 from dataset import Train_Dataset, Semi_Labeled_Dataset, Semi_Unlabeled_Dataset,  ImbalancedDatasetSampler
 from torch.utils.data import DataLoader
 
@@ -20,7 +20,7 @@ class our_match(object):
         # load model, ema_model, optimizer, scheduler
         self.model = kwargs['model'].to(self.args.device)
         if self.args.use_ema:
-            self.ema_model = kwargs['ema_model'].to(self.args.device)
+            self.ema_model = kwargs['ema_model'].ema.to(self.args.device)
 
         self.optimizer = kwargs['optimizer']
         self.scheduler = kwargs['scheduler']
@@ -78,7 +78,7 @@ class our_match(object):
         return labeled_indexs, unlabeled_indexs
 
     def per_class_num(self, labels):
-        label_to_count = 0
+        label_to_count = []
 
         for i in range(self.args.num_class):
             cnt = len(np.where(labels == i)[0])
@@ -113,26 +113,30 @@ class our_match(object):
 
         if self.args.imb_method == 'resample':
             labeled_sampler =  ImbalancedDatasetSampler(labeled_dataset)
-            labeled_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.batch_size, shuffle=False,
-                              num_workers=args.workers, pin_memory=True, sampler=labeled_sampler)
+            labeled_loader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=False,
+                              num_workers=8, pin_memory=True, sampler=labeled_sampler, drop_last=True)
+
         else:
-            labeled_loader = torch.utils.data.DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=True,
+            labeled_loader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=True,
                                                           num_workers=8, pin_memory=True, drop_last=True)
 
-        unlabeled_loader = torch.utils.data.DataLoader(dataset=unlabeled_dataset, batch_size=u_batch,
+        unlabeled_loader = DataLoader(dataset=unlabeled_dataset, batch_size=u_batch,
                                                             shuffle=True, num_workers=8, pin_memory=True,
                                                             drop_last=True)
         # re-weighting ratio
         label_to_count = self.per_class_num(labeled_dataset.targets)
-        per_class_weights = (1 - label_to_count / np.max(label_to_count))
+        per_class_weights = 1 - label_to_count / np.max(label_to_count)
         self.per_class_weights = torch.FloatTensor(per_class_weights).to(self.args.device)
+        print(label_to_count)
+        print('Labeled num is %d Unlabled num is %d' %(labeled_num, unlabeled_num))
+
 
         return labeled_loader, unlabeled_loader
 
     def run(self, train_data, clean_targets, noisy_targets, trainloader, testloader):
 
-        # initilization of ema_prob
-        self.ema_prob = torch.zeros(self.args.train_num).to(self.args.device)
+        self.train_num = clean_targets.shape[0]
+        self.ema_prob = torch.zeros(self.train_num, self.args.num_class).to(self.args.device)
 
         for i in range(self.args.epoch):
             if i < self.args.warmup:
@@ -170,23 +174,24 @@ class our_match(object):
             inputs_x, inputs_u = inputs_x.to(self.args.device), inputs_u.to(self.args.device)
             inputs_x = self.aug(inputs_x, 'weak')
             inputs_u, inputs_u2 = self.aug(inputs_u, 'weak_strong')
-
             targets_x = targets_x.to(self.args.device)
 
-            logits_x = self.model(inputs_x)
             logits_u_w = self.model(inputs_u)
             logits_u_s = self.model(inputs_u2)
 
-            Lx = None
-            if self.args.imb_method == 'resample':
-               lam = np.random.beta(self.args.alpha, self.args.alpha)
-               lam = max(lam, 1 - lam)
-               criterion = nn.CrossEntropyLoss()
-               idx = torch.randperm(self.args.batch_size) 
-               # mix loss
-               mix_x = inputs_x * lam + (1 - lam) * inputs_x[idx, :]
-               mix_logits = self.model(mix_x)
-               Lx = self.mixup_criterion(criterion, mix_logits, targets_x, targets_x[idx], lam)
+            logits_x = self.model(inputs_x)
+            Lx = F.cross_entropy(logits_x, targets_x, reduction='mean')
+
+            # Lx = None
+            # if self.args.imb_method == 'resample':
+            #    lam = np.random.beta(10, 10)
+            #    lam = max(lam, 1 - lam)
+            #    criterion = nn.CrossEntropyLoss()
+            #    idx = torch.randperm(inputs_x.size()[0])
+            #    # mix loss
+            #    mix_x = inputs_x * lam + (1 - lam) * inputs_x[idx, :]
+            #    mix_logits = self.model(mix_x)
+            #    Lx = self.mixup_criterion(criterion, mix_logits, targets_x, targets_x[idx], lam)
 
 
             pseudo_label = torch.softmax(logits_u_w.detach()/self.args.T, dim=-1)
@@ -194,7 +199,7 @@ class our_match(object):
             max_probs, targets_u = torch.max(pseudo_label, dim=-1)
             mask = max_probs.ge(self.args.threshold).float()
 
-            Lu = (F.cross_entropy(logits_u_s, targets_u, weight=self.per_class_weights
+            Lu = (F.cross_entropy(logits_u_s, targets_u, weight=self.per_class_weights,
                                   reduction='none') * mask).mean()
 
             loss = Lx + self.args.lambda_u * Lu
@@ -220,11 +225,9 @@ class our_match(object):
     def warmup(self, epoch, trainloader):
         self.model.train()
         batch_idx = 0
-        num_iter = (len(trainloader.dataset) // self.args.batch_size) + 1
-
         losses = AverageMeter()
 
-        for i, (x, y) in enumerate(trainloader):
+        for i, (x, y, _) in enumerate(trainloader):
             x = x.to(self.args.device)
             y = y.to(self.args.device)
             logits = self.model(x)
@@ -243,9 +246,9 @@ class our_match(object):
 
         print('Epoch [%3d/%3d] Loss: %.2f' % (epoch, self.args.epoch, losses.avg))
 
-    def eval_train(self, trainloaders, model):
+    def eval_train(self, trainloader, model):
         model = model.eval()
-        prob = torch.zeros(len(trainloader)).to(self.args.device)
+        prob = torch.zeros(self.train_num, self.args.num_class).to(self.args.device)
 
         for i, (x, y, index) in enumerate(trainloader):
             x = x.to(self.args.device)
@@ -289,5 +292,6 @@ class our_match(object):
         class_acc = cm.diagonal()
 
         acc = 100 * float(correct) / float(total)
+        print(class_acc)
         print('Epoch [%3d/%3d] Test Acc: %.2f%%' %(epoch, self.args.epoch, acc))
         self.writer.add_scalar('Test Acc',  acc, epoch)

@@ -72,28 +72,11 @@ class AverageMeter(object):
         self.count += n
         self.avg = self.sum / self.count
 
-def predict(predict_loader, model, device):
-    model.eval()
-    preds = []
-    probs = []
-
-    with torch.no_grad():
-        for images, _ in predict_loader:
-            if torch.cuda.is_available():
-                images = images.to(device)
-                logits = model(images)
-                outputs = F.softmax(logits, dim=1)
-                prob, pred = torch.max(outputs.data, 1)
-                preds.append(pred)
-                probs.append(prob)
-
-    return torch.cat(preds, dim=0).cpu(), torch.cat(probs, dim=0).cpu()
-
 def predict_dataset_softmax(predict_loader, model, device):
     model.eval()
     softmax_outs = []
     with torch.no_grad():
-        for images1, _ in predict_loader:
+        for images1, _, _ in predict_loader:
             images1 = images1.to(device)
             logits1 = model(images1)
             outputs = F.softmax(logits1, dim=1)

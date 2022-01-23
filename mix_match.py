@@ -1,17 +1,12 @@
 import numpy as np
-from tqdm import tqdm
-import random
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.distributions.categorical as cat
 from torch.utils.tensorboard import SummaryWriter
-import sys
 from sklearn.metrics import confusion_matrix
 
-from utils import AverageMeter, predict_softmax, predict_dataset_softmax
-from dataset import Train_Dataset, Semi_Labeled_Dataset, Semi_Unlabeled_Dataset
-from torch.utils.data import BatchSampler, RandomSampler
+from utils import AverageMeter, predict_dataset_softmax
+from dataset import Semi_Labeled_Dataset, Semi_Unlabeled_Dataset
 from torch.utils.data import DataLoader
 
 class mix_match(object):
@@ -21,8 +16,7 @@ class mix_match(object):
         # load model, ema_model, optimizer, scheduler
         self.model = kwargs['model'].to(self.args.device)
         if self.args.use_ema:
-            self.ema_model = kwargs['ema_model'].to(self.args.device)
-
+            self.ema_model = kwargs['ema_model']
         self.optimizer = kwargs['optimizer']
         self.scheduler = kwargs['scheduler']
 
@@ -64,9 +58,7 @@ class mix_match(object):
 
 
     def splite_confident(self, outs, clean_targets, noisy_targets):
-      
         probs, preds = torch.max(outs.data, 1)
-
         labeled_indexs = []
         unlabeled_indexs = []
 
@@ -83,7 +75,7 @@ class mix_match(object):
         if self.args.clean_method != 'ema':
            soft_outs = predict_dataset_softmax(train_loader, self.model, self.args.device)
         else:
-           soft_outs = self.args.ema_prob
+           soft_outs = self.ema_prob
 
         labeled_indexs, unlabeled_indexs = self.splite_confident(soft_outs, clean_targets, noisy_targets)
         labeled_dataset = Semi_Labeled_Dataset(train_data[labeled_indexs], noisy_targets[labeled_indexs])
@@ -101,18 +93,20 @@ class mix_match(object):
         l_batch = self.args.batch_size
         #u_batch = int(self.args.batch_size * min(6,  unlabeled_num * 1.0 / labeled_num))
         u_batch = self.args.batch_size * 6
-        labeled_loader = torch.utils.data.DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=True,
+        labeled_loader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=True,
                                                           num_workers=8, pin_memory=True, drop_last=True)
-        unlabeled_loader = torch.utils.data.DataLoader(dataset=unlabeled_dataset, batch_size=u_batch,
+        unlabeled_loader = DataLoader(dataset=unlabeled_dataset, batch_size=u_batch,
                                                             shuffle=True, num_workers=8, pin_memory=True,
                                                             drop_last=True)
+        print('Labeled num is %d Unlabled num is %d' %(labeled_num, unlabeled_num))
 
         return labeled_loader, unlabeled_loader
 
     def run(self, train_data, clean_targets, noisy_targets, trainloader, testloader):
 
         # initilization of ema_prob
-        self.ema_prob = torch.zeros(self.args.train_num).to(self.args.device)
+        self.train_num = clean_targets.shape[0]
+        self.ema_prob = torch.zeros(self.train_num, self.args.num_class).to(self.args.device)
 
         for i in range(self.args.epoch):
             if i < self.args.warmup:
@@ -194,7 +188,7 @@ class mix_match(object):
 
         losses = AverageMeter()
 
-        for i, (x, y) in enumerate(trainloader):
+        for i, (x, y, _) in enumerate(trainloader):
             x = x.to(self.args.device)
             y = y.to(self.args.device)
             logits = self.model(x)
@@ -213,10 +207,9 @@ class mix_match(object):
 
         print('Epoch [%3d/%3d] Loss: %.2f' % (epoch, self.args.epoch, losses.avg))
 
-    def eval_train(self, trainloaders, model):
+    def eval_train(self, trainloader, model):
         model = model.eval()
-        prob = torch.zeros(len(trainloader)).to(self.args.device)
-
+        prob = torch.zeros(self.train_num, self.args.num_class).to(self.args.device)
         for i, (x, y, index) in enumerate(trainloader):
             x = x.to(self.args.device)
             y = y.to(self.args.device)

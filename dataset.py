@@ -2,6 +2,7 @@ import numpy as np
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader
 from noise_utils import noisify
+import torch
 
 def get_dataset(root, dataset, num_classes=10):
     # noise-data
@@ -36,7 +37,8 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
             if num_samples is None else num_samples
             
         # distribution of classes in the dataset 
-        label_to_count = [0] * len(np.unique(dataset.targets))
+        label_to_count = [0] * 12
+        print(len(label_to_count))
         for idx in self.indices:
             label = self._get_label(dataset, idx)
             label_to_count[label] += 1
@@ -60,9 +62,9 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
         return self.num_samples
 
 
-class Train_Dataset(data.Dataset):
+class Train_Dataset(Dataset):
 
-    def __init__(self, data, label, train=True, data_type='img', transform = None, num_classes = 10,
+    def __init__(self, data, label, transform = None, num_classes = 10,
                  noise_type='symmetric', noise_rate=0.5, select_class=-1):
 
         self.num_classes = num_classes
@@ -72,7 +74,6 @@ class Train_Dataset(data.Dataset):
 
         self.gt = self.train_labels.copy()
 
-        self.data_type = data_type
         self.transform = transform
         self.train_noisy_labels = self.train_labels.copy()
         self.noise_or_not = np.array([True for _ in range(len(self.train_labels))])
@@ -94,10 +95,6 @@ class Train_Dataset(data.Dataset):
     def __getitem__(self, index):
 
         feat, gt = self.train_data[index], int(self.train_noisy_labels[index])
-
-        if self.data_type == 'img':
-           feat = Image.fromarray(feat)
-
         if self.transform is not None:
             feat = self.transform(feat)
 
@@ -105,7 +102,6 @@ class Train_Dataset(data.Dataset):
 
     def __len__(self):
         return len(self.train_data)
-
 
 
 class Test_Dataset(Dataset):
@@ -140,7 +136,7 @@ class Semi_Labeled_Dataset(Dataset):
     def __init__(self, data, labels):
         self.data = np.array(data)
         self.targets = np.array(labels)
-        self.length = len(self.train_labels)
+        self.length = len(self.targets)
 
     def __getitem__(self, index):
         img, target = self.data[index], self.targets[index]

@@ -7,7 +7,7 @@ from dataset import get_dataset
 from model import MLP_Net
 import torch.backends.cudnn as cudnn
 import torch
-from mix_match import mix_match
+from our_match import our_match
 import torch.nn as nn
 
 from torch.utils.tensorboard import SummaryWriter
@@ -29,7 +29,7 @@ parser.add_argument('--input_dim', type=int, default=1024)
 parser.add_argument('--gamma', type=float, default=0.95, metavar='M',help='Learning rate step gamma (default: 0.7)')
 parser.add_argument('--dataset', type = str, help = 'mnist, cifar10, cifar100, or imagenet_tiny', default = 'malware')
 
-parser.add_argument('--epoch', type=int, default=110)
+parser.add_argument('--epoch', type=int, default=120)
 parser.add_argument('--warmup', type=int, default=10)
 parser.add_argument('--optimizer', type = str, default='adam')
 parser.add_argument('--cuda', type = int, default=1)
@@ -56,12 +56,12 @@ parser.add_argument('--T', default=0.5, type=float,
 parser.add_argument('--threshold', default=0.95, type=float,
                         help='pseudo label threshold')
 
-parser.add_argument('--use-ema', action='store_true', default=True,
+parser.add_argument('--use-ema', action='store_true', default=False,
                         help='use EMA model')
 parser.add_argument('--ema-decay', default=0.999, type=float,
                         help='EMA decay rate')
 # divide data into clean / noise 
-parser.add_argument('--clean_method', default='ema', type=str)
+parser.add_argument('--clean_method', default='consistency', type=str)
 parser.add_argument('--clean_theta', default=0.95, type=float)
 
 # imbalance method
@@ -92,22 +92,6 @@ test_loader = torch.utils.data.DataLoader(
         test_dataset, batch_size=args.batch_size, shuffle=False,
         num_workers=args.num_workers, pin_memory=True, drop_last=False)
 
-model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=nn.BatchNorm1d)
-
-ema_model = None
-if args.use_ema:
-    from models.ema import ModelEMA
-    ema_model = ModelEMA(args, model, args.ema_decay)
-
-if args.optimizer == 'adam':
-    optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.weight_decay)
-else:
-    optimizer = torch.optim.SGD(model.parameters(), args.lr, momentum=args.momentum,
-                                weight_decay=args.weight_decay, nesterov=args.nesterov)
-# Cosin Learning Rates
-lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-            milestones=[30, 60], gamma=0.9, last_epoch=-1)
-
 # check if gpu training is available
 if torch.cuda.is_available():
    args.device = torch.device('cuda')
@@ -117,7 +101,24 @@ else:
     args.device = torch.device('cpu')
     args.gpu_index = -1
 
+
+model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=nn.BatchNorm1d)
+
+ema_model = None
+if args.use_ema:
+    from model import ModelEMA
+    ema_model = ModelEMA(args, model, args.ema_decay)
+
+if args.optimizer == 'adam':
+    optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.weight_decay)
+else:
+    optimizer = torch.optim.SGD(model.parameters(), args.lr, momentum=args.momentum,
+                                weight_decay=args.weight_decay, nesterov=args.nesterov)
+# Cosin Learning Rates
+lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
+            milestones=[10, 90], gamma=0.1, last_epoch=-1)
+
 with torch.cuda.device(args.gpu_index):
-    mixmatch = mix_match(model=model, ema_model=ema_model, optimizer=optimizer, scheduler=lr_scheduler, args=args)
-    mixmatch.run(train_data, clean_targets, noisy_targets, \
+    ourmatch = our_match(model=model, ema_model=ema_model, optimizer=optimizer, scheduler=lr_scheduler, args=args)
+    ourmatch.run(train_data, clean_targets, noisy_targets, \
                  train_loader, test_loader)
