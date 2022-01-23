@@ -39,7 +39,7 @@ parser.add_argument('--seed', type=int, default=1)
 parser.add_argument('--num_workers', type=int, default=8, help='how many subprocesses to use for data loading')
 parser.add_argument('--gpu_index', type=int, default=0)
 
-# noise setting
+# noise_setting
 parser.add_argument('--noise_rate', type = float, help = 'corruption rate, should be less than 1', default = 0.5)
 parser.add_argument('--noise_type', type = str,  default='none')
 
@@ -63,6 +63,9 @@ parser.add_argument('--ema-decay', default=0.999, type=float,
 # divide data into clean / noise 
 parser.add_argument('--clean_method', default='ema', type=str)
 parser.add_argument('--clean_theta', default=0.95, type=float)
+
+# imbalance method
+parser.add_argument('--imb_method', default='resample', type=str)
 
 
 

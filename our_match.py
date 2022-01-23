@@ -10,11 +10,10 @@ import sys
 from sklearn.metrics import confusion_matrix
 
 from utils import AverageMeter, predict_softmax, predict_dataset_softmax
-from dataset import Train_Dataset, Semi_Labeled_Dataset, Semi_Unlabeled_Dataset
-from torch.utils.data import BatchSampler, RandomSampler
+from dataset import Train_Dataset, Semi_Labeled_Dataset, Semi_Unlabeled_Dataset,  ImbalancedDatasetSampler
 from torch.utils.data import DataLoader
 
-class mix_match(object):
+class our_match(object):
 
     def __init__(self, *args, **kwargs):
         self.args = kwargs['args']
@@ -78,6 +77,16 @@ class mix_match(object):
 
         return labeled_indexs, unlabeled_indexs
 
+    def per_class_num(self, labels):
+        label_to_count = 0
+
+        for i in range(self.args.num_class):
+            cnt = len(np.where(labels == i)[0])
+            label_to_count.append(cnt)
+
+        return label_to_count
+
+
     def update_loader(self, train_loader, train_data, clean_targets, noisy_targets):
 
         if self.args.clean_method != 'ema':
@@ -101,11 +110,22 @@ class mix_match(object):
         l_batch = self.args.batch_size
         #u_batch = int(self.args.batch_size * min(6,  unlabeled_num * 1.0 / labeled_num))
         u_batch = self.args.batch_size * 6
-        labeled_loader = torch.utils.data.DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=True,
+
+        if self.args.imb_method == 'resample':
+            labeled_sampler =  ImbalancedDatasetSampler(labeled_dataset)
+            labeled_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.batch_size, shuffle=False,
+                              num_workers=args.workers, pin_memory=True, sampler=labeled_sampler)
+        else:
+            labeled_loader = torch.utils.data.DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=True,
                                                           num_workers=8, pin_memory=True, drop_last=True)
+
         unlabeled_loader = torch.utils.data.DataLoader(dataset=unlabeled_dataset, batch_size=u_batch,
                                                             shuffle=True, num_workers=8, pin_memory=True,
                                                             drop_last=True)
+        # re-weighting ratio
+        label_to_count = self.per_class_num(labeled_dataset.targets)
+        per_class_weights = (1 - label_to_count / np.max(label_to_count))
+        self.per_class_weights = torch.FloatTensor(per_class_weights).to(self.args.device)
 
         return labeled_loader, unlabeled_loader
 
@@ -119,7 +139,7 @@ class mix_match(object):
                 self.warmup(i, trainloader)
             else:
                 labeled_trainloader, unlabeled_trainloader = self.update_loader(trainloader, train_data, clean_targets, noisy_targets)
-                self.fixmatch_train(i, labeled_trainloader, unlabeled_trainloader)
+                self.ourmatch_train(i, labeled_trainloader, unlabeled_trainloader)
 
                 self.update_cnt += 1
 
@@ -134,7 +154,7 @@ class mix_match(object):
             if self.args.clean_method == 'ema':
                self.eval_train(trainloader, eval_model)
 
-    def fixmatch_train(self, epoch, labeled_trainloader, unlabeled_trainloader):
+    def ourmatch_train(self, epoch, labeled_trainloader, unlabeled_trainloader):
 
         self.model.train()
 
@@ -157,14 +177,24 @@ class mix_match(object):
             logits_u_w = self.model(inputs_u)
             logits_u_s = self.model(inputs_u2)
 
-            Lx = F.cross_entropy(logits_x, targets_x, reduction='mean')
+            Lx = None
+            if self.args.imb_method == 'resample':
+               lam = np.random.beta(self.args.alpha, self.args.alpha)
+               lam = max(lam, 1 - lam)
+               criterion = nn.CrossEntropyLoss()
+               idx = torch.randperm(self.args.batch_size) 
+               # mix loss
+               mix_x = inputs_x * lam + (1 - lam) * inputs_x[idx, :]
+               mix_logits = self.model(mix_x)
+               Lx = self.mixup_criterion(criterion, mix_logits, targets_x, targets_x[idx], lam)
+
 
             pseudo_label = torch.softmax(logits_u_w.detach()/self.args.T, dim=-1)
 
             max_probs, targets_u = torch.max(pseudo_label, dim=-1)
             mask = max_probs.ge(self.args.threshold).float()
 
-            Lu = (F.cross_entropy(logits_u_s, targets_u,
+            Lu = (F.cross_entropy(logits_u_s, targets_u, weight=self.per_class_weights
                                   reduction='none') * mask).mean()
 
             loss = Lx + self.args.lambda_u * Lu

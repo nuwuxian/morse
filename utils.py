@@ -51,7 +51,7 @@ class WarmupCosineLrScheduler(torch.optim.lr_scheduler._LRScheduler):
         return ratio
 
 
-
+# Recording Tools
 class AverageMeter(object):
     """Computes and stores the average and current value
        Imported from https://github.com/pytorch/examples/blob/master/imagenet/main.py#L247-L262
@@ -88,20 +88,6 @@ def predict(predict_loader, model, device):
                 probs.append(prob)
 
     return torch.cat(preds, dim=0).cpu(), torch.cat(probs, dim=0).cpu()
-
-
-def predict_softmax(predict_loader, model, device):
-    model.eval()
-    softmax_outs = []
-    with torch.no_grad():
-        for images1, images2 in predict_loader:
-            images1 = images1.to(device)
-            images2 = images2.to(device)
-            logits1 = model(images1)
-            logits2 = model(images2)
-            outputs = (F.softmax(logits1, dim=1) + F.softmax(logits2, dim=1)) / 2
-            softmax_outs.append(outputs)
-    return torch.cat(softmax_outs, dim=0).cpu()
 
 def predict_dataset_softmax(predict_loader, model, device):
     model.eval()
