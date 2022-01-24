@@ -10,6 +10,8 @@ import torch
 from our_match import our_match
 import torch.nn as nn
 
+from os import path as osp
+from utils import make_timestamp
 from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser()
@@ -47,7 +49,7 @@ parser.add_argument('--noise_type', type = str,  default='none')
 parser.add_argument('--mu', default=1.0, type=int,
                         help='coefficient of unlabeled batch size')
 
-parser.add_argument('--lambda-u', default=1, type=float,
+parser.add_argument('--lambda-u', default=1.0, type=float,
                         help='coefficient of unlabeled loss')
 
 parser.add_argument('--T', default=0.5, type=float,
@@ -66,8 +68,6 @@ parser.add_argument('--clean_theta', default=0.95, type=float)
 
 # imbalance method
 parser.add_argument('--imb_method', default='resample', type=str)
-
-
 
 args = parser.parse_args()
 root = './data'
@@ -91,6 +91,14 @@ train_loader = torch.utils.data.DataLoader(
 test_loader = torch.utils.data.DataLoader(
         test_dataset, batch_size=args.batch_size, shuffle=False,
         num_workers=args.num_workers, pin_memory=True, drop_last=False)
+
+
+out_dir = 'output/'
+timestamp = make_timestamp()
+exp_name = args.seed
+SAVE_DIR  = osp.join(out_dir, '{}-{}'.format(timestamp, exp_name))
+os.makedirs(SAVE_DIR, exist_ok=True)
+
 
 # check if gpu training is available
 if torch.cuda.is_available():
@@ -119,6 +127,7 @@ lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
             milestones=[10, 90], gamma=0.1, last_epoch=-1)
 
 with torch.cuda.device(args.gpu_index):
-    ourmatch = our_match(model=model, ema_model=ema_model, optimizer=optimizer, scheduler=lr_scheduler, args=args)
+    ourmatch = our_match(model=model, ema_model=ema_model, optimizer=optimizer, \
+                         scheduler=lr_scheduler, logdir=SAVE_DIR, args=args)
     ourmatch.run(train_data, clean_targets, noisy_targets, \
                  train_loader, test_loader)

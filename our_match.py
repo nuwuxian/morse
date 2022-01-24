@@ -26,6 +26,7 @@ class our_match(object):
         self.scheduler = kwargs['scheduler']
 
         self.threshold = self.args.threshold
+        self.log_dir = kwargs['logdir']
         # tensorboard writer
         self.writer = SummaryWriter()
         self.update_cnt = 0
@@ -96,7 +97,7 @@ class our_match(object):
 
         labeled_indexs, unlabeled_indexs = self.splite_confident(soft_outs, clean_targets, noisy_targets)
         labeled_dataset = Semi_Labeled_Dataset(train_data[labeled_indexs], noisy_targets[labeled_indexs])
-        unlabeled_dataset = Semi_Unlabeled_Dataset(train_data[unlabeled_indexs])
+        unlabeled_dataset = Semi_Unlabeled_Dataset(train_data[unlabeled_indexs], clean_targets[unlabeled_indexs])
 
         labeled_num, unlabeled_num = len(labeled_indexs), len(unlabeled_indexs)
 
@@ -104,8 +105,18 @@ class our_match(object):
         clean_num = np.sum(noisy_targets[labeled_indexs]==clean_targets[labeled_indexs])
         clean_ratio = clean_num * 1.0 / labeled_num
 
+
+        prob_cls = [8, 10]
+        noise_label = noisy_targets[labeled_indexs]
+        clean_label = clean_targets[labeled_indexs]
+        for cls in prob_cls:
+            idx = np.where(noise_label == cls)[0]
+            clean_ratio = np.sum(clean_label[idx] == cls) * 1.0 / len(idx)
+            self.writer.add_scalar('Class_'+str(cls), clean_ratio, self.update_cnt)
+
         self.writer.add_scalar('Labeled_clean_ratio', clean_ratio, global_step=self.update_cnt)
         self.writer.add_scalar('Labeled_num', labeled_num, global_step=self.update_cnt)
+        self.writer.add_scalar('Class_11_num_label', len(np.where(noisy_targets[labeled_indexs] == 11)[0]), self.update_cnt)
 
         l_batch = self.args.batch_size
         #u_batch = int(self.args.batch_size * min(6,  unlabeled_num * 1.0 / labeled_num))
@@ -138,6 +149,7 @@ class our_match(object):
         self.train_num = clean_targets.shape[0]
         self.ema_prob = torch.zeros(self.train_num, self.args.num_class).to(self.args.device)
 
+        best_acc = 0.0
         for i in range(self.args.epoch):
             if i < self.args.warmup:
                 self.warmup(i, trainloader)
@@ -154,9 +166,14 @@ class our_match(object):
             else:
                 eval_model = self.model
                 
-            self.eval(testloader, eval_model, i)
+            acc, class_acc = self.eval(testloader, eval_model, i)
             if self.args.clean_method == 'ema':
                self.eval_train(trainloader, eval_model)
+
+            if acc > best_acc:
+                best_acc = acc
+                np.savez_compressed(self.log_dir + '/best_results.npz', test_acc=best_acc, test_class_acc=class_acc,
+                                    best_epoch=i)
 
     def ourmatch_train(self, epoch, labeled_trainloader, unlabeled_trainloader):
 
@@ -166,12 +183,16 @@ class our_match(object):
         losses_x = AverageMeter()
         losses_u = AverageMeter()
 
+        last_num = AverageMeter()
+
         for batch_idx, (b_l, b_u) in enumerate(zip(labeled_trainloader, unlabeled_trainloader)):
             # unpack b_l, b_u
             inputs_x, targets_x = b_l
-            inputs_u = b_u
+            inputs_u, gts_u = b_u
 
             inputs_x, inputs_u = inputs_x.to(self.args.device), inputs_u.to(self.args.device)
+            gts_u = gts_u.to(self.args.device)
+
             inputs_x = self.aug(inputs_x, 'weak')
             inputs_u, inputs_u2 = self.aug(inputs_u, 'weak_strong')
             targets_x = targets_x.to(self.args.device)
@@ -202,6 +223,10 @@ class our_match(object):
             Lu = (F.cross_entropy(logits_u_s, targets_u, weight=self.per_class_weights,
                                   reduction='none') * mask).mean()
 
+            use_last_num = torch.logical_and(torch.logical_and(targets_u == 11, max_probs.ge(self.args.threshold)),
+                                             gts_u == 11)
+            last_num.update(torch.sum(use_last_num).item())
+
             loss = Lx + self.args.lambda_u * Lu
             # update model
             self.optimizer.zero_grad()
@@ -220,6 +245,7 @@ class our_match(object):
         self.writer.add_scalar('Loss', losses.avg, self.update_cnt)
         self.writer.add_scalar('Loss_x', losses_x.avg, self.update_cnt)
         self.writer.add_scalar('Loss_x', losses_u.avg, self.update_cnt)
+        self.writer.add_scalar('Class_11_num_unlabel', last_num.avg, self.update_cnt)
 
 
     def warmup(self, epoch, trainloader):
@@ -295,3 +321,5 @@ class our_match(object):
         print(class_acc)
         print('Epoch [%3d/%3d] Test Acc: %.2f%%' %(epoch, self.args.epoch, acc))
         self.writer.add_scalar('Test Acc',  acc, epoch)
+
+        return acc, class_acc

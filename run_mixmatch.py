@@ -46,7 +46,7 @@ parser.add_argument('--noise_type', type = str,  default='none')
 parser.add_argument('--mu', default=1.0, type=int,
                         help='coefficient of unlabeled batch size')
 
-parser.add_argument('--lambda-u', default=0, type=float,
+parser.add_argument('--lambda-u', default=1, type=float,
                         help='coefficient of unlabeled loss')
 
 parser.add_argument('--T', default=0.5, type=float,

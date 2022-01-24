@@ -38,7 +38,6 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
             
         # distribution of classes in the dataset 
         label_to_count = [0] * 12
-        print(len(label_to_count))
         for idx in self.indices:
             label = self._get_label(dataset, idx)
             label_to_count[label] += 1
@@ -150,16 +149,17 @@ class Semi_Labeled_Dataset(Dataset):
 
 
 class Semi_Unlabeled_Dataset(Dataset):
-    def __init__(self, data):
+    def __init__(self, data, labels):
         self.data = np.array(data)
+        self.targets = np.array(labels)
         self.length = self.data.shape[0]
 
     def __getitem__(self, index):
-        img = self.data[index]
-        return img
+        img, target = self.data[index], self.targets[index]
+        return img, target
 
     def __len__(self):
         return self.length
 
     def getData(self):
-        return self.data
+        return self.data, self.targets
