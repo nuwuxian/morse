@@ -106,12 +106,13 @@ class our_match(object):
         clean_ratio = clean_num * 1.0 / labeled_num
 
 
-        prob_cls = [8, 10]
+        prob_cls = range(0, 12)
         noise_label = noisy_targets[labeled_indexs]
         clean_label = clean_targets[labeled_indexs]
         for cls in prob_cls:
             idx = np.where(noise_label == cls)[0]
             clean_ratio = np.sum(clean_label[idx] == cls) * 1.0 / len(idx)
+            print(clean_ratio)
             self.writer.add_scalar('Class_'+str(cls), clean_ratio, self.update_cnt)
 
         self.writer.add_scalar('Labeled_clean_ratio', clean_ratio, global_step=self.update_cnt)
@@ -158,22 +159,21 @@ class our_match(object):
                 self.ourmatch_train(i, labeled_trainloader, unlabeled_trainloader)
 
                 self.update_cnt += 1
-
+                acc, class_acc = self.eval(testloader, eval_model, i)
+                if acc > best_acc:
+                    best_acc = acc
+                    np.savez_compressed(self.log_dir + '/best_results.npz', test_acc=best_acc, test_class_acc=class_acc,
+                                        best_epoch=i)
             self.scheduler.step()
-
             if self.args.use_ema:
                 eval_model = self.ema_model.ema
             else:
                 eval_model = self.model
-                
-            acc, class_acc = self.eval(testloader, eval_model, i)
+
             if self.args.clean_method == 'ema':
                self.eval_train(trainloader, eval_model)
 
-            if acc > best_acc:
-                best_acc = acc
-                np.savez_compressed(self.log_dir + '/best_results.npz', test_acc=best_acc, test_class_acc=class_acc,
-                                    best_epoch=i)
+
 
     def ourmatch_train(self, epoch, labeled_trainloader, unlabeled_trainloader):
 
