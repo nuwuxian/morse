@@ -54,7 +54,7 @@ def count_knn_distribution(args, feat_cord, label, cluster_sum, k, norm='l2'):
 
 def get_knn_acc_all_class(args, data_set, k=10, sel_noisy=None):
     # Build Feature Clusters --------------------------------------
-    KINDS = args.num_classes
+    KINDS = args.num_class
 
     all_point_cnt = data_set['feature'].shape[0]
     # global
@@ -74,11 +74,11 @@ def get_knn_acc_all_class(args, data_set, k=10, sel_noisy=None):
 
 
 
-def noniterate_detection(config, data_set, train_dataset, sel_noisy=[]):
+def noniterate_detection(args, data_set, train_dataset, sel_noisy=[]):
     # non-iterate
     # sel_noisy = []
     # print(data_set['noisy_label'])
-    sel_noisy = get_knn_acc_all_class(config, data_set, k=config.k, sel_noisy=sel_noisy)
+    sel_noisy = get_knn_acc_all_class(args, data_set, k=args.k, sel_noisy=sel_noisy)
 
     sel_noisy = np.array(sel_noisy)
     sel_clean = np.array(list(set(data_set['index'].tolist()) ^ set(sel_noisy)))
@@ -97,15 +97,17 @@ def noniterate_detection(config, data_set, train_dataset, sel_noisy=[]):
  
 
 
-def noise_detect(model, train_loader, device):
+def noise_detect(model, train_loader, train_dataset, args):
+
+
     model.eval()
     record = [[] for _ in range(config.num_classes)]
 
     feat, label, index = [], [], []
     with torch.no_grad():
         for i_batch, (feature, label, index) in enumerate(train_loader):
-            feature = feature.to(device)
-            label = label.to(device)
+            feature = feature.to(args.device)
+            label = label.to(args.device)
             extracted_feature = model.forward_encoder(feature)
 
             # feat / label / index
@@ -121,7 +123,7 @@ def noise_detect(model, train_loader, device):
 
 
     dataset = {'feature': feat, 'label': label, 'index': index}
-    noniterate_detection(config, dataset, train_dataset, [])
+    noniterate_detection(args, dataset, train_dataset, [])
 
 # Cosine learning rate scheduler.
 #

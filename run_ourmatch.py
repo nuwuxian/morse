@@ -70,6 +70,8 @@ parser.add_argument('--clean_theta', default=0.95, type=float)
 parser.add_argument('--imb_method', default='resample', type=str)
 
 parser.add_argument('--pretrain_path', default=None, type=str)
+# kmeans 
+parser.add_argument('--k', default=10, type=int)
 
 args = parser.parse_args()
 root = './data'
@@ -123,11 +125,7 @@ if args.pretrain_path != None:
    model.load_state_dict(model_state)
 
    # noise_detect
-   noise_detect(model, train_loader)
-
-
-
-
+   noise_detect(model, train_loader, train_dataset, args)
 
 ema_model = None
 if args.use_ema:
