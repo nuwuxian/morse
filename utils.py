@@ -8,6 +8,121 @@ def make_timestamp():
     return datetime.datetime.now().strftime(ISO_TIMESTAMP)
 
 
+# cosdistance
+def cosDistance(features):
+    # features: N*M matrix. N features, each features is M-dimension.
+    features = F.normalize(features, dim=1) # each feature's l2-norm should be 1 
+    similarity_matrix = torch.matmul(features, features.T)
+    distance_matrix = 1.0 - similarity_matrix
+    return distance_matrix
+
+
+def count_knn_distribution(args, feat_cord, label, cluster_sum, k, norm='l2'):
+    # feat_cord = torch.tensor(final_feat)
+    KINDS = args.num_classes
+    
+    dist = cosDistance(feat_cord)
+
+    print(f'knn parameter is k = {k}')
+    time1 = time.time()
+    min_similarity = args.min_similarity
+    values, indices = dist.topk(k, dim=1, largest=False, sorted=True)
+    values[:, 0] = 2.0 * values[:, 1] - values[:, 2]
+
+    knn_labels = label[indices]
+
+
+    knn_labels_cnt = torch.zeros(cluster_sum, KINDS)
+
+    for i in range(KINDS):
+        knn_labels_cnt[:, i] += torch.sum((1.0 - min_similarity - values) * (knn_labels == i), 1)
+
+        # print(knn_labels_cnt[0])
+    time2 = time.time()
+    print(f'Running time for k = {k} is {time2 - time1}')
+
+    if norm == 'l2':
+        # normalized by l2-norm -- cosine distance
+        knn_labels_prob = F.normalize(knn_labels_cnt, p=2.0, dim=1)
+    elif norm == 'l1':
+        # normalized by mean
+        knn_labels_prob = knn_labels_cnt / torch.sum(knn_labels_cnt, 1).reshape(-1, 1)
+    else:
+        raise NameError('Undefined norm')
+    return knn_labels_prob
+
+
+def get_knn_acc_all_class(args, data_set, k=10, sel_noisy=None):
+    # Build Feature Clusters --------------------------------------
+    KINDS = args.num_classes
+
+    all_point_cnt = data_set['feature'].shape[0]
+    # global
+    sample = np.random.choice(np.arange(data_set['feature'].shape[0]), all_point_cnt, replace=False)
+    # final_feat, noisy_label = get_feat_clusters(data_set, sample)
+    final_feat = data_set['feature'][sample]
+    noisy_label = data_set['noisy_label'][sample]
+    noise_or_not_sample = data_set['noise_or_not'][sample]
+    sel_idx = data_set['index'][sample]
+    knn_labels_cnt = count_knn_distribution(args, final_feat, noisy_label, all_point_cnt, k=k, norm='l2')
+    # test majority voting
+    print(f'Use MV')
+    label_pred = np.argmax(knn_labels_cnt, axis=1).reshape(-1)
+    sel_noisy += (sel_idx[label_pred != noisy_label]).tolist()
+    
+    return sel_noisy
+
+
+
+def noniterate_detection(config, data_set, train_dataset, sel_noisy=[]):
+    # non-iterate
+    # sel_noisy = []
+    # print(data_set['noisy_label'])
+    sel_noisy = get_knn_acc_all_class(config, data_set, k=config.k, sel_noisy=sel_noisy)
+
+    sel_noisy = np.array(sel_noisy)
+    sel_clean = np.array(list(set(data_set['index'].tolist()) ^ set(sel_noisy)))
+
+    noisy_in_sel_noisy = np.sum(train_dataset.noise_or_not[sel_noisy]) / sel_noisy.shape[0]
+    precision_noisy = noisy_in_sel_noisy
+    recall_noisy = np.sum(train_dataset.noise_or_not[sel_noisy]) / np.sum(train_dataset.noise_or_not)
+
+
+    print(f'[noisy] precision: {precision_noisy}')
+    print(f'[noisy] recall: {recall_noisy}')
+    print(f'[noisy] F1-score: {2.0 * precision_noisy * recall_noisy / (precision_noisy + recall_noisy)}')
+
+    return sel_noisy, sel_clean, data_set['index']
+
+ 
+
+
+def noise_detect(model, train_loader, device):
+    model.eval()
+    record = [[] for _ in range(config.num_classes)]
+
+    feat, label, index = [], [], []
+    with torch.no_grad():
+        for i_batch, (feature, label, index) in enumerate(train_loader):
+            feature = feature.to(device)
+            label = label.to(device)
+            extracted_feature = model.forward_encoder(feature)
+
+            # feat / label / index
+            feat.append(extracted_feature.detach().cpu())
+            label.append(label.detach().cpu())
+            index.append(index)
+
+
+    # concat feat, label, index
+    feat = torch.cat(feat, 0)
+    label = torch.cat(label, 0)
+    index = torch.cat(index, 0)
+
+
+    dataset = {'feature': feat, 'label': label, 'index': index}
+    noniterate_detection(config, dataset, train_dataset, [])
+
 # Cosine learning rate scheduler.
 #
 # From https://github.com/valencebond/FixMatch_pytorch/blob/master/lr_scheduler.py

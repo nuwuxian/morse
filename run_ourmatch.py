@@ -11,7 +11,7 @@ from our_match import our_match
 import torch.nn as nn
 
 from os import path as osp
-from utils import make_timestamp
+from utils import make_timestamp, noise_detect
 from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser()
@@ -69,6 +69,8 @@ parser.add_argument('--clean_theta', default=0.95, type=float)
 # imbalance method
 parser.add_argument('--imb_method', default='resample', type=str)
 
+parser.add_argument('--pretrain_path', default=None, type=str)
+
 args = parser.parse_args()
 root = './data'
 dataset = args.dataset
@@ -111,6 +113,21 @@ else:
 
 
 model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=nn.BatchNorm1d)
+
+
+if args.pretrain_path != None:
+   pretrained_state = torch.load(args.pretrain_path, map_location=torch.device('cpu'))['state_dict']
+   model_state = model.state_dict()
+   pretrained_state = { k:v for k,v in pretrained_state.items() if k in model_state and v.size() == model_state[k].size() }
+   model_state.update(pretrained_state)
+   model.load_state_dict(model_state)
+
+   # noise_detect
+   noise_detect(model, train_loader)
+
+
+
+
 
 ema_model = None
 if args.use_ema:
