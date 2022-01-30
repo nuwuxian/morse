@@ -2,11 +2,11 @@ import numpy as np
 import torch
 import datetime
 import torch.nn.functional as F
-
+import time
+import torch.nn as nn
 def make_timestamp():
     ISO_TIMESTAMP = "%Y%m%d_%H%M%S"
     return datetime.datetime.now().strftime(ISO_TIMESTAMP)
-
 
 # cosdistance
 def cosDistance(features):
@@ -19,13 +19,13 @@ def cosDistance(features):
 
 def count_knn_distribution(args, feat_cord, label, cluster_sum, k, norm='l2'):
     # feat_cord = torch.tensor(final_feat)
-    KINDS = args.num_classes
+    KINDS = args.num_class
     
     dist = cosDistance(feat_cord)
 
     print(f'knn parameter is k = {k}')
     time1 = time.time()
-    min_similarity = args.min_similarity
+    min_similarity = 0
     values, indices = dist.topk(k, dim=1, largest=False, sorted=True)
     values[:, 0] = 2.0 * values[:, 1] - values[:, 2]
 
@@ -62,7 +62,6 @@ def get_knn_acc_all_class(args, data_set, k=10, sel_noisy=None):
     # final_feat, noisy_label = get_feat_clusters(data_set, sample)
     final_feat = data_set['feature'][sample]
     noisy_label = data_set['noisy_label'][sample]
-    noise_or_not_sample = data_set['noise_or_not'][sample]
     sel_idx = data_set['index'][sample]
     knn_labels_cnt = count_knn_distribution(args, final_feat, noisy_label, all_point_cnt, k=k, norm='l2')
     # test majority voting
@@ -87,10 +86,12 @@ def noniterate_detection(args, data_set, train_dataset, sel_noisy=[]):
     precision_noisy = noisy_in_sel_noisy
     recall_noisy = np.sum(train_dataset.noise_or_not[sel_noisy]) / np.sum(train_dataset.noise_or_not)
 
-
+    noisy_in_sel_clean = np.sum(train_dataset.noise_or_not[sel_clean]) / sel_clean.shape[0]
     print(f'[noisy] precision: {precision_noisy}')
     print(f'[noisy] recall: {recall_noisy}')
     print(f'[noisy] F1-score: {2.0 * precision_noisy * recall_noisy / (precision_noisy + recall_noisy)}')
+
+    import pdb; pdb.set_trace()
 
     return sel_noisy, sel_clean, data_set['index']
 
@@ -98,12 +99,9 @@ def noniterate_detection(args, data_set, train_dataset, sel_noisy=[]):
 
 
 def noise_detect(model, train_loader, train_dataset, args):
-
-
     model.eval()
-    record = [[] for _ in range(config.num_classes)]
 
-    feat, label, index = [], [], []
+    feats, labels, indexs = [], [], []
     with torch.no_grad():
         for i_batch, (feature, label, index) in enumerate(train_loader):
             feature = feature.to(args.device)
@@ -111,18 +109,17 @@ def noise_detect(model, train_loader, train_dataset, args):
             extracted_feature = model.forward_encoder(feature)
 
             # feat / label / index
-            feat.append(extracted_feature.detach().cpu())
-            label.append(label.detach().cpu())
-            index.append(index)
+            feats.append(extracted_feature.detach().cpu())
+            labels.append(label.detach().cpu())
+            indexs.append(index)
 
 
     # concat feat, label, index
-    feat = torch.cat(feat, 0)
-    label = torch.cat(label, 0)
-    index = torch.cat(index, 0)
+    feats = torch.cat(feats, 0)
+    labels = torch.cat(labels, 0)
+    indexs = torch.cat(indexs, 0)
 
-
-    dataset = {'feature': feat, 'label': label, 'index': index}
+    dataset = {'feature': feats, 'noisy_label': labels, 'index': indexs}
     noniterate_detection(args, dataset, train_dataset, [])
 
 # Cosine learning rate scheduler.
@@ -189,13 +186,25 @@ class AverageMeter(object):
         self.count += n
         self.avg = self.sum / self.count
 
-def predict_dataset_softmax(predict_loader, model, device):
+def predict_dataset_softmax(predict_loader, model, train_num, device):
+    # model.eval()
+    # softmax_outs = []
+    # with torch.no_grad():
+    #     for images1, _, _ in predict_loader:
+    #         images1 = images1.to(device)
+    #         logits1 = model(images1)
+    #         outputs = F.softmax(logits1, dim=1)
+    #         softmax_outs.append(outputs)
+    # return torch.cat(softmax_outs, dim=0).cpu()
+
     model.eval()
-    softmax_outs = []
+    loss_outs = torch.zeros(train_num).to(device)
+
     with torch.no_grad():
-        for images1, _, _ in predict_loader:
+        for images1, label, idx in predict_loader:
             images1 = images1.to(device)
             logits1 = model(images1)
-            outputs = F.softmax(logits1, dim=1)
-            softmax_outs.append(outputs)
-    return torch.cat(softmax_outs, dim=0).cpu()
+            # outputs = F.softmax(logits1, dim=1)
+            loss = nn.CrossEntropyLoss(reduce=False)(logits1, label)
+            loss_outs[idx] = loss
+    return loss_outs

@@ -31,7 +31,7 @@ parser.add_argument('--input_dim', type=int, default=1024)
 parser.add_argument('--gamma', type=float, default=0.95, metavar='M',help='Learning rate step gamma (default: 0.7)')
 parser.add_argument('--dataset', type = str, help = 'mnist, cifar10, cifar100, or imagenet_tiny', default = 'malware')
 
-parser.add_argument('--epoch', type=int, default=120)
+parser.add_argument('--epoch', type=int, default=130)
 parser.add_argument('--warmup', type=int, default=10)
 parser.add_argument('--optimizer', type = str, default='adam')
 parser.add_argument('--cuda', type = int, default=1)
@@ -69,7 +69,7 @@ parser.add_argument('--clean_theta', default=0.95, type=float)
 # imbalance method
 parser.add_argument('--imb_method', default='resample', type=str)
 
-parser.add_argument('--pretrain_path', default=None, type=str)
+parser.add_argument('--pretrain_path', default='none', type=str)
 # kmeans 
 parser.add_argument('--k', default=10, type=int)
 
@@ -116,16 +116,16 @@ else:
 
 model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=nn.BatchNorm1d)
 
-
-if args.pretrain_path != None:
-   pretrained_state = torch.load(args.pretrain_path, map_location=torch.device('cpu'))['state_dict']
-   model_state = model.state_dict()
-   pretrained_state = { k:v for k,v in pretrained_state.items() if k in model_state and v.size() == model_state[k].size() }
-   model_state.update(pretrained_state)
-   model.load_state_dict(model_state)
-
-   # noise_detect
-   noise_detect(model, train_loader, train_dataset, args)
+# if args.pretrain_path != None:
+#
+#    pretrained_state = torch.load(args.pretrain_path, map_location=torch.device('cpu'))['model_state_dict']
+#    model_state = model.state_dict()
+#    pretrained_state = { k:v for k,v in pretrained_state.items() if k in model_state and v.size() == model_state[k].size() }
+#    model_state.update(pretrained_state)
+#    model.load_state_dict(model_state)
+#
+#    # noise_detect
+#    noise_detect(model, train_loader, train_dataset, args)
 
 ema_model = None
 if args.use_ema:
@@ -141,8 +141,11 @@ else:
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
             milestones=[10, 90], gamma=0.1, last_epoch=-1)
 
+labeled_dist = [0.14, 0.15, 0.15, 0.12, 0.15, 0.09, 0.01, 0.12, 0.03, 0.02, 0.01, 0.01]
+
+
 with torch.cuda.device(args.gpu_index):
     ourmatch = our_match(model=model, ema_model=ema_model, optimizer=optimizer, \
-                         scheduler=lr_scheduler, logdir=SAVE_DIR, args=args)
+                         scheduler=lr_scheduler, logdir=SAVE_DIR, dist=labeled_dist, args=args)
     ourmatch.run(train_data, clean_targets, noisy_targets, \
                  train_loader, test_loader)

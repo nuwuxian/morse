@@ -5,6 +5,17 @@ from copy import deepcopy
 import torch
 
 
+def initialize_weights(module):
+    if isinstance(module, nn.Conv2d):
+        nn.init.kaiming_normal_(module.weight.data, mode='fan_out')
+    elif isinstance(module, nn.BatchNorm1d):
+        module.weight.data.fill_(1)
+        module.bias.data.zero_()
+    elif isinstance(module, nn.Linear):
+        nn.init.xavier_uniform_(module.weight.data)
+        #module.bias.data.zero_()
+
+
 class ModelEMA(object):
     def __init__(self, args, model, decay):
         self.ema = deepcopy(model)
@@ -45,7 +56,7 @@ class MLP_Net(nn.Module):
         super(MLP_Net, self).__init__()
 
         self.encoder = nn.Sequential()
-        self.classfier = nn.Sequential()
+        self.classifier = nn.Sequential()
 
 
         for i in range(len(hiddens)):
@@ -55,7 +66,7 @@ class MLP_Net(nn.Module):
             elif i != len(hiddens) - 1:
                 self.encoder.add_module('mlp_%d' %i, nn.Linear(hiddens[i-1], hiddens[i], bias=bias))
             else:
-                self.classfier.add_module('mlp_%d' %i, nn.Linear(hiddens[i-1], hiddens[i], bias=bias))
+                self.classifier.add_module('mlp_%d' %i, nn.Linear(hiddens[i-1], hiddens[i], bias=bias))
 
             if batch_norm is not None:
                 if i != len(hiddens) - 1:
@@ -66,6 +77,11 @@ class MLP_Net(nn.Module):
 
     def forward(self, x):
         return self.classifier(self.encoder(x))
+
+    def re_init(self):
+        self.encoder.apply(initialize_weights)
+        self.classifier.apply(initialize_weights)
+
 
 
     def forward_encoder(self, x):
