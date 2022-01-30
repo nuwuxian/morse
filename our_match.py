@@ -8,12 +8,10 @@ import torch.distributions.categorical as cat
 from torch.utils.tensorboard import SummaryWriter
 import sys
 from sklearn.metrics import confusion_matrix
-
 from utils import AverageMeter, predict_dataset_softmax
 from dataset import Train_Dataset, Semi_Labeled_Dataset, Semi_Unlabeled_Dataset,  ImbalancedDatasetSampler
 from torch.utils.data import DataLoader
 from losses import LDAMLoss
-
 
 class our_match(object):
 
@@ -34,20 +32,19 @@ class our_match(object):
         self.update_cnt = 0
         # Distribution of noisy data
         self.dist = kwargs['dist']
-        self.cls_threshold = self.dist * self.args.threshold / max(self.dist)
+        self.cls_threshold = np.array(self.dist) * self.args.threshold / max(self.dist)
         self.cls_threshold = torch.Tensor(self.cls_threshold).to(self.args.device) 
-        if self.args.imb_method == 'resample' or 'mixup':
+        if self.args.imb_method == 'resample' or self.args.imb_method == 'mixup':
            self.criterion = nn.CrossEntropyLoss().to(self.args.device)
-
         elif self.args.imb_method == 'LDAM':
-           cls_num_list = self.dist * 600
+           cls_num_list = np.array(self.dist) * 600
            beta = 0.9999
            effective_num = 1.0 - np.power(beta, cls_num_list)
            per_cls_weights = (1.0 - beta) / np.array(effective_num)
            per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
            per_cls_weights = torch.FloatTensor(per_cls_weights).to(self.args.device)
-           self.criterion = LDAMLoss(cls_num_list=cls_num_list, max_m=0.5, s=30, weight=per_cls_weights).to(self.args.device)
-
+           self.criterion = LDAMLoss(cls_num_list=cls_num_list, max_m=0.5, s=30, \
+                                     device=self.args.device, weight=per_cls_weights).to(self.args.device)
     def aug(self, input, aug_type):
         mask_ratio = []
         if aug_type == 'weak':
@@ -131,7 +128,6 @@ class our_match(object):
         for cls in prob_cls:
             idx = np.where(noise_label == cls)[0]
             clean_ratio = np.sum(clean_label[idx] == cls) * 1.0 / len(idx)
-            print(clean_ratio)
             self.writer.add_scalar('Class_'+str(cls), clean_ratio, self.update_cnt)
 
         self.writer.add_scalar('Labeled_clean_ratio', clean_ratio, global_step=self.update_cnt)
@@ -144,20 +140,21 @@ class our_match(object):
         if self.args.imb_method == 'resample' or 'mixup':
             labeled_sampler =  ImbalancedDatasetSampler(labeled_dataset)
             labeled_loader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=False,
-                              num_workers=8, pin_memory=True, sampler=labeled_sampler, drop_last=True)
+                                        num_workers=self.args.num_workers, pin_memory=True, sampler=labeled_sampler,
+                                        drop_last=True)
         else:
             labeled_loader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=True,
-                                                          num_workers=8, pin_memory=True, drop_last=True)
+                                        num_workers=self.args.num_workers, pin_memory=True, drop_last=True)
 
         labeled_balanced_loader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=True,
-                                                          num_workers=8, pin_memory=True, drop_last=True)
+                                             num_workers=self.args.num_workers, pin_memory=True, drop_last=True)
 
-        unlabeled_loader = DataLoader(dataset=unlabeled_dataset, batch_size=u_batch,
-                                                            shuffle=True, num_workers=8, pin_memory=True,
-                                                            drop_last=True)
+        unlabeled_loader = DataLoader(dataset=unlabeled_dataset, batch_size=u_batch, shuffle=True,
+                                      num_workers=self.args.num_workers, pin_memory=True,
+                                      drop_last=True)
         per_cls_weights = labeled_sampler.per_cls_weights
 
-        self.per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
+        self.per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * self.args.num_class
         self.per_cls_weights = torch.FloatTensor(per_cls_weights).to(self.args.device)
         print('Labeled num is %d Unlabled num is %d' %(labeled_num, unlabeled_num))
 
@@ -221,12 +218,11 @@ class our_match(object):
             logits_u_w = self.model(inputs_u)
             logits_u_s = self.model(inputs_u2)
 
-            if args.imb_method == 'resample':
+            if self.args.imb_method == 'resample':
                logits_x = self.model(inputs_x)
                Lx = F.cross_entropy(logits_x, targets_x, reduction='mean')
 
-            elif args.imb_method == 'mixup':
-
+            elif self.args.imb_method == 'mixup':
                lam = np.random.beta(self.args.alpha, self.args.alpha)
                lam = max(lam, 1 - lam)
                idx = torch.randperm(inputs_x.size()[0])
@@ -234,28 +230,24 @@ class our_match(object):
                mix_x = self.model.forward_encoder(inputs_x) * lam + \
                         (1 - lam) * self.model.forward_encoder(inputs_bx)
                mix_logits = self.model.forward_classifier(mix_x)
-
                Lx = self.mixup_criterion(self.criterion, mix_logits, targets_x, targets_bx[idx], lam)
 
-            elif args.imb_method == 'ldam':
+            elif self.args.imb_method == 'LDAM':
                # LADM algorithm
                logits_x = self.model(inputs_x)
                Lx = self.criterion(logits_x, targets_x)
-
 
             pseudo_label = torch.softmax(logits_u_w.detach()/self.args.T, dim=-1)
 
             max_probs, targets_u = torch.max(pseudo_label, dim=-1)
 
             if self.args.use_pretrain:
-               mask = max_probs.ge(self.args.threshold).float()
+               mask = max_probs.ge(self.args.threshold).float().to(self.args.device)
             else:
                # class specific threshold
-               mask = mask_probs.ge(self.cls_threshold[targets_u])
-
-            Lu = (F.cross_entropy(logits_u_s, targets_u, weight=self.per_class_weights,
+               mask = max_probs.ge(self.cls_threshold[targets_u]).float().to(self.args.device)
+            Lu = (F.cross_entropy(logits_u_s, targets_u, weight=self.per_cls_weights,
                                   reduction='none') * mask).mean()
-
             loss = Lx + self.args.lambda_u * Lu
             # update model
             self.optimizer.zero_grad()
@@ -273,7 +265,7 @@ class our_match(object):
         # write into tensorboard
         self.writer.add_scalar('Loss', losses.avg, self.update_cnt)
         self.writer.add_scalar('Loss_x', losses_x.avg, self.update_cnt)
-        self.writer.add_scalar('Loss_x', losses_u.avg, self.update_cnt)
+        self.writer.add_scalar('Loss_u', losses_u.avg, self.update_cnt)
 
     def warmup(self, epoch, trainloader):
         self.model.train()

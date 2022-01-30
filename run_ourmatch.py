@@ -16,7 +16,6 @@ from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser()
 
-
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--batch_size', type=int, default=128)
 
@@ -38,7 +37,7 @@ parser.add_argument('--cuda', type = int, default=1)
 parser.add_argument('--num_class', type = int, default=12)
 
 parser.add_argument('--seed', type=int, default=1)
-parser.add_argument('--num_workers', type=int, default=8, help='how many subprocesses to use for data loading')
+parser.add_argument('--num_workers', type=int, default=0, help='how many subprocesses to use for data loading')
 parser.add_argument('--gpu_index', type=int, default=0)
 
 # noise_setting
@@ -56,7 +55,6 @@ parser.add_argument('--threshold', default=0.95, type=float,
 # whether use the pretrain model
 parser.add_argument('--use_pretrain', default=True, type=bool)
 
-
 parser.add_argument('--use-ema', action='store_true', default=False,
                         help='use EMA model')
 parser.add_argument('--ema-decay', default=0.999, type=float,
@@ -66,12 +64,11 @@ parser.add_argument('--clean_method', default='consistency', type=str)
 parser.add_argument('--clean_theta', default=0.95, type=float)
 
 # imbalance method
-parser.add_argument('--imb_method', default='resample', type=str)   # none / re-sample / mixup / LDAM loss
-
+parser.add_argument('--imb_method', default='LDAM', type=str)   # none / re-sample / mixup / LDAM loss
+# mixup alpha
+parser.add_argument('--alpha', default=10, type=int)
 parser.add_argument('--pretrain_path', default=None, type=str)
-parser.add_argument('--use_gt_distribution', default=False, type=bool)
-
-
+parser.add_argument('--use_true_distribution', default=True, type=bool)
 # kmeans 
 parser.add_argument('--k', default=10, type=int)
 
@@ -141,7 +138,7 @@ else:
                                 weight_decay=args.weight_decay, nesterov=args.nesterov)
 # Cosin Learning Rates
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-            milestones=[10, 90], gamma=0.1, last_epoch=-1)
+            milestones=[10, 90], gamma=0.3, last_epoch=-1)
 
 dist = [0.14, 0.15, 0.15, 0.12, 0.15, 0.09, 0.01, 0.12, 0.03, 0.02, 0.01, 0.01]
 
