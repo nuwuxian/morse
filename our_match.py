@@ -76,7 +76,6 @@ class our_match(object):
     def mixup_criterion(self, criterion, pred, y_a, y_b, lam):
         return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
-
     def splite_confident(self, outs, clean_targets, noisy_targets):
         labeled_indexs = []
         unlabeled_indexs = []
@@ -246,7 +245,11 @@ class our_match(object):
             else:
                # class specific threshold
                mask = max_probs.ge(self.cls_threshold[targets_u]).float().to(self.args.device)
-            Lu = (F.cross_entropy(logits_u_s, targets_u, weight=self.per_cls_weights,
+            if self.args.unlabel_reweight:
+                weight = self.per_cls_weights
+            else:
+                weight = None
+            Lu = (F.cross_entropy(logits_u_s, targets_u, weight=weight,
                                   reduction='none') * mask).mean()
             loss = Lx + self.args.lambda_u * Lu
             # update model
