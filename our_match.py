@@ -12,6 +12,8 @@ from sklearn.metrics import confusion_matrix
 from utils import AverageMeter, predict_dataset_softmax
 from dataset import Train_Dataset, Semi_Labeled_Dataset, Semi_Unlabeled_Dataset,  ImbalancedDatasetSampler
 from torch.utils.data import DataLoader
+from losses import LDAMLoss
+
 
 class our_match(object):
 
@@ -30,9 +32,21 @@ class our_match(object):
         # tensorboard writer
         self.writer = SummaryWriter()
         self.update_cnt = 0
-        self.start = True
-
+        # Distribution of noisy data
         self.dist = kwargs['dist']
+        self.cls_threshold = self.dist * self.args.threshold / max(self.dist)
+        self.cls_threshold = torch.Tensor(self.cls_threshold).to(self.args.device) 
+        if self.args.imb_method == 'resample' or 'mixup':
+           self.criterion = nn.CrossEntropyLoss().to(self.args.device)
+
+        elif self.args.imb_method == 'LDAM':
+           cls_num_list = self.dist * 600
+           beta = 0.9999
+           effective_num = 1.0 - np.power(beta, cls_num_list)
+           per_cls_weights = (1.0 - beta) / np.array(effective_num)
+           per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
+           per_cls_weights = torch.FloatTensor(per_cls_weights).to(self.args.device)
+           self.criterion = LDAMLoss(cls_num_list=cls_num_list, max_m=0.5, s=30, weight=per_cls_weights).to(self.args.device)
 
     def aug(self, input, aug_type):
         mask_ratio = []
@@ -67,66 +81,39 @@ class our_match(object):
 
 
     def splite_confident(self, outs, clean_targets, noisy_targets):
-        # probs, preds = torch.max(outs.data, 1)
-        #
-        # labeled_indexs = []
-        # unlabeled_indexs = []
-        #
-        # for i in range(0, len(noisy_targets)):
-        #     if preds[i] == noisy_targets[i] and probs[i] > self.args.clean_theta:
-        #         labeled_indexs.append(i)
-        #     else:
-        #         unlabeled_indexs.append(i)
-        #
-        # return labeled_indexs, unlabeled_indexs
+        labeled_indexs = []
+        unlabeled_indexs = []
 
-        # labeled_indexs = []
-        # unlabeled_indexs = []
-        # for cls in range(self.args.num_class):
-        #     idx = np.where(noisy_targets==cls)[0]
-        #     loss_cls = outs[idx]
-        #     sorted, indices = torch.sort(loss_cls, descending=False)
-        #     select_num = int(len(indices) * 0.15)
-        #     for i in range(len(indices)):
-        #         if i < select_num:
-        #            labeled_indexs.append(idx[indices[i].item()])
-        #         else:
-        #            unlabeled_indexs.append(idx[indices[i].item()])
-
-        labeled_indexs, unlabeled_indexs = [], []
-
-        for cls in range(self.args.num_class):
-            #idx = np.where(clean_targets == cls)[0]
-            idx = np.where(noisy_targets == cls)[0]
-            select_num = int(600 * self.dist[cls])
-            cnt = 0
-            for i in range(len(idx)):
-                if noisy_targets[idx[i]] == clean_targets[idx[i]]:
-                   cnt += 1
-                   if cnt <= select_num:
-                      labeled_indexs.append(idx[i])
-                   else:
-                      unlabeled_indexs.append(idx[i])
+        if not self.args.use_true_distribution:
+            probs, preds = torch.max(outs.data, 1)
+            for i in range(0, len(noisy_targets)):
+                if preds[i] == noisy_targets[i] and probs[i] > self.args.clean_theta:
+                    labeled_indexs.append(i)
                 else:
-                     unlabeled_indexs.append(idx[i])
+                    unlabeled_indexs.append(i)
+        else:
+            for cls in range(self.args.num_class):
+                idx = np.where(noisy_targets == cls)[0]
+                select_num = int(600 * self.dist[cls])
+                cnt = 0
+                for i in range(len(idx)):
+                    if noisy_targets[idx[i]] == clean_targets[idx[i]]:
+                       cnt += 1
+                       if cnt <= select_num:
+                          labeled_indexs.append(idx[i])
+                       else:
+                          unlabeled_indexs.append(idx[i])
+                    else:
+                         unlabeled_indexs.append(idx[i])
+
         return labeled_indexs, unlabeled_indexs
-
-    def per_class_num(self, labels):
-        label_to_count = []
-
-        for i in range(self.args.num_class):
-            cnt = len(np.where(labels == i)[0])
-            label_to_count.append(cnt)
-
-        return label_to_count
-
 
     def update_loader(self, train_loader, train_data, clean_targets, noisy_targets):
 
         if self.args.clean_method != 'ema':
-           soft_outs = predict_dataset_softmax(train_loader, self.model, self.train_num, self.args.device)
+           soft_outs = predict_dataset_softmax(train_loader, self.model, self.args.device)
         else:
-           soft_outs = self.ema_prob
+           soft_outs = self.args.ema_prob
 
         labeled_indexs, unlabeled_indexs = self.splite_confident(soft_outs, clean_targets, noisy_targets)
         labeled_dataset = Semi_Labeled_Dataset(train_data[labeled_indexs], noisy_targets[labeled_indexs])
@@ -136,62 +123,45 @@ class our_match(object):
 
         # print confident set clean-ratio
         clean_num = np.sum(noisy_targets[labeled_indexs]==clean_targets[labeled_indexs])
-        clean_ratio_a = clean_num * 1.0 / labeled_num
+        clean_ratio = clean_num * 1.0 / labeled_num
 
-
-        prob_cls = range(0, 12)
+        prob_cls = range(0, self.args.num_class)
         noise_label = noisy_targets[labeled_indexs]
         clean_label = clean_targets[labeled_indexs]
-
-        cal_clean_num = []
-        cal_clean_ratio = []
         for cls in prob_cls:
             idx = np.where(noise_label == cls)[0]
             clean_ratio = np.sum(clean_label[idx] == cls) * 1.0 / len(idx)
-            print('clean_ratio is %f' %clean_ratio)
+            print(clean_ratio)
             self.writer.add_scalar('Class_'+str(cls), clean_ratio, self.update_cnt)
-            cal_clean_num.append(len(idx))
-            cal_clean_ratio.append(clean_ratio)
-
-        # print(cal_clean_num)
-        # print(cal_clean_ratio)
 
         self.writer.add_scalar('Labeled_clean_ratio', clean_ratio, global_step=self.update_cnt)
         self.writer.add_scalar('Labeled_num', labeled_num, global_step=self.update_cnt)
-        self.writer.add_scalar('Class_11_num_label', len(np.where(noisy_targets[labeled_indexs] == 11)[0]), self.update_cnt)
 
         l_batch = self.args.batch_size
         #u_batch = int(self.args.batch_size * min(6,  unlabeled_num * 1.0 / labeled_num))
         u_batch = self.args.batch_size * 6
 
-        if self.args.imb_method == 'resample':
+        if self.args.imb_method == 'resample' or 'mixup':
             labeled_sampler =  ImbalancedDatasetSampler(labeled_dataset)
             labeled_loader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=False,
                               num_workers=8, pin_memory=True, sampler=labeled_sampler, drop_last=True)
-
         else:
             labeled_loader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=True,
                                                           num_workers=8, pin_memory=True, drop_last=True)
 
-        b_loader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=True,
-                                    num_workers=8, pin_memory=True, drop_last=True)
-
+        labeled_balanced_loader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=True,
+                                                          num_workers=8, pin_memory=True, drop_last=True)
 
         unlabeled_loader = DataLoader(dataset=unlabeled_dataset, batch_size=u_batch,
                                                             shuffle=True, num_workers=8, pin_memory=True,
                                                             drop_last=True)
-        # re-weighting ratio
-        self.per_class_weights = labeled_sampler.per_cls_weights / np.sum(labeled_sampler.per_cls_weights) * 12
-        self.per_class_weights = torch.FloatTensor(self.per_class_weights)
-        # label_to_count = self.per_class_num(labeled_dataset.targets)
-        # per_class_weights = 1 - label_to_count / np.max(label_to_count)
-        # self.per_class_weights = torch.FloatTensor(per_class_weights).to(self.args.device)
+        per_cls_weights = labeled_sampler.per_cls_weights
 
-
+        self.per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
+        self.per_cls_weights = torch.FloatTensor(per_cls_weights).to(self.args.device)
         print('Labeled num is %d Unlabled num is %d' %(labeled_num, unlabeled_num))
 
-
-        return labeled_loader, unlabeled_loader, b_loader
+        return labeled_loader, labeled_balanced_loader, unlabeled_loader
 
     def run(self, train_data, clean_targets, noisy_targets, trainloader, testloader):
 
@@ -203,11 +173,11 @@ class our_match(object):
             if i < self.args.warmup:
                 self.warmup(i, trainloader)
             else:
-                if i == self.args.warmup:
-                   torch.save({'model_state_dict':self.model.state_dict()}, '/home/xkw5132/model.pt')
-                   labeled_trainloader, unlabeled_trainloader, b_loader = self.update_loader(trainloader, train_data, clean_targets, noisy_targets)
-                #self.model.re_init()
-                self.ourmatch_train(i, labeled_trainloader, b_loader, unlabeled_trainloader)
+                if i == self.args.warmup and not self.args.use_pretrain:
+                    self.model.init()
+
+                labeled_loader, labeled_balanced_loader, unlabeled_loader = self.update_loader(trainloader, train_data, clean_targets, noisy_targets)
+                self.ourmatch_train(i, labeled_loader, labeled_balanced_loader, unlabeled_loader)
 
                 self.update_cnt += 1
                 acc, class_acc = self.eval(testloader, eval_model, i)
@@ -220,11 +190,11 @@ class our_match(object):
                 eval_model = self.ema_model.ema
             else:
                 eval_model = self.model
-            self.eval(testloader, eval_model, i)
+
             if self.args.clean_method == 'ema':
                self.eval_train(trainloader, eval_model)
 
-    def ourmatch_train(self, epoch, labeled_trainloader, b_loader, unlabeled_trainloader):
+    def ourmatch_train(self, epoch, labeled_loader, labeled_balanced_loader, unlabeled_loader):
 
         self.model.train()
 
@@ -232,51 +202,59 @@ class our_match(object):
         losses_x = AverageMeter()
         losses_u = AverageMeter()
 
-        last_num = AverageMeter()
-
-        for batch_idx, (b_l, b_b, b_u) in enumerate(zip(labeled_trainloader, b_loader, unlabeled_trainloader)):
+        for batch_idx, (b_l, b_balanced_l, b_u) in enumerate(zip(labeled_loader, labeled_balanced_loader, unlabeled_loader)):
             # unpack b_l, b_u
             inputs_x, targets_x = b_l
+            inputs_bx, targets_bx = b_balanced_l
             inputs_u, gts_u = b_u
-            inputs_x_b, targets_x_b = b_b
 
+            inputs_x, inputs_bx, inputs_u = inputs_x.to(self.args.device), inputs_bx.to(self.args.device), inputs_u.to(self.args.device)
 
-            inputs_x, inputs_u = inputs_x.to(self.args.device), inputs_u.to(self.args.device)
-            inputs_x_b, targets_x_b = inputs_x_b.to(self.args.device), targets_x_b.to(self.args.device)
             gts_u = gts_u.to(self.args.device)
 
             inputs_x = self.aug(inputs_x, 'weak')
             inputs_u, inputs_u2 = self.aug(inputs_u, 'weak_strong')
+
             targets_x = targets_x.to(self.args.device)
+            targets_bx = targets_bx.to(self.args.device)
 
             logits_u_w = self.model(inputs_u)
             logits_u_s = self.model(inputs_u2)
 
-            #logits_x = self.model(inputs_x)
-            #Lx = F.cross_entropy(logits_x, targets_x, reduction='mean')
-            # Lx = None
-            if self.args.imb_method == 'resample':
-               lam = np.random.beta(10, 10)
+            if args.imb_method == 'resample':
+               logits_x = self.model(inputs_x)
+               Lx = F.cross_entropy(logits_x, targets_x, reduction='mean')
+
+            elif args.imb_method == 'mixup':
+
+               lam = np.random.beta(self.args.alpha, self.args.alpha)
                lam = max(lam, 1 - lam)
-               criterion = nn.CrossEntropyLoss()
                idx = torch.randperm(inputs_x.size()[0])
-               # mix loss
-               mix_x = self.model.forward_encoder(inputs_x) * lam + (1 - lam) * self.model.forward_encoder(inputs_x_b[idx, :])
+               # mixup in hidden-layers
+               mix_x = self.model.forward_encoder(inputs_x) * lam + \
+                        (1 - lam) * self.model.forward_encoder(inputs_bx)
                mix_logits = self.model.forward_classifier(mix_x)
-               Lx = self.mixup_criterion(criterion, mix_logits, targets_x, targets_x_b[idx], lam)
+
+               Lx = self.mixup_criterion(self.criterion, mix_logits, targets_x, targets_bx[idx], lam)
+
+            elif args.imb_method == 'ldam':
+               # LADM algorithm
+               logits_x = self.model(inputs_x)
+               Lx = self.criterion(logits_x, targets_x)
 
 
             pseudo_label = torch.softmax(logits_u_w.detach()/self.args.T, dim=-1)
 
             max_probs, targets_u = torch.max(pseudo_label, dim=-1)
-            mask = max_probs.ge(self.args.threshold).float()
+
+            if self.args.use_pretrain:
+               mask = max_probs.ge(self.args.threshold).float()
+            else:
+               # class specific threshold
+               mask = mask_probs.ge(self.cls_threshold[targets_u])
 
             Lu = (F.cross_entropy(logits_u_s, targets_u, weight=self.per_class_weights,
                                   reduction='none') * mask).mean()
-
-            use_last_num = torch.logical_and(torch.logical_and(targets_u == 0, max_probs.ge(self.args.threshold)),
-                                             gts_u == 0)
-            last_num.update(torch.sum(use_last_num).item())
 
             loss = Lx + self.args.lambda_u * Lu
             # update model
@@ -296,8 +274,6 @@ class our_match(object):
         self.writer.add_scalar('Loss', losses.avg, self.update_cnt)
         self.writer.add_scalar('Loss_x', losses_x.avg, self.update_cnt)
         self.writer.add_scalar('Loss_x', losses_u.avg, self.update_cnt)
-        self.writer.add_scalar('Class_11_num_unlabel', last_num.avg, self.update_cnt)
-
 
     def warmup(self, epoch, trainloader):
         self.model.train()
@@ -310,10 +286,7 @@ class our_match(object):
             logits = self.model(x)
             
             self.optimizer.zero_grad()
-            #from losses import NCEandRCE, GeneralizedCrossEntropy
-            #loss = NCEandRCE(1.0, 1.0, 12)(logits, y)
             loss = nn.CrossEntropyLoss()(logits, y)
-            #loss = GeneralizedCrossEntropy(12, 0.7)(logits, y)
             loss.backward()
             self.optimizer.step()
             # update ema
@@ -337,12 +310,7 @@ class our_match(object):
             logits = model(x)
             prob[index] = F.softmax(logits, dim=1)
 
-
-        if self.start:
-            self.start = False
-            self.ema_prob = prob
-        else:
-            self.ema_prob = self.ema_prob * self.args.ema_decay + (1 - self.args.ema_decay) * prob
+        self.ema_prob = self.ema_prob * self.args.ema_decay + (1 - self.args.ema_decay) * prob
 
     def eval(self, testloader, eval_model, epoch):
         eval_model.eval()  # Change model to 'eval' mode.

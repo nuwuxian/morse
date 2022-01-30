@@ -14,11 +14,8 @@ def get_dataset(root, dataset, num_classes=10):
     # clean-data
     clean_data = np.load(root + '/' + dataset +'_true.npz')
     clean_labels = clean_data['y_train']
-
-    noise_or_not = (train_labels != clean_labels)
-
-    dataset_train = Train_Dataset(train_data, train_labels, noise_or_not=noise_or_not, num_classes=10, noise_type='none')
-
+    
+    dataset_train = Train_Dataset(train_data, train_labels, num_classes=10, noise_type='none')
     dataset_test = Test_Dataset(test_data, test_labels)
 
 
@@ -38,8 +35,7 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
         # draw `len(indices)` samples in each iteration
         self.num_samples = len(self.indices) \
             if num_samples is None else num_samples
-        # label_to_count = [0.14, 0.15, 0.15, 0.12, 0.15, 0.09, 0.01, 0.12, 0.03, 0.02, 0.01, 0.01]
-        # label_to_count = np.array(label_to_count) * self.num_samples
+            
         # distribution of classes in the dataset 
         label_to_count = [0] * 12
         for idx in self.indices:
@@ -68,7 +64,7 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
 
 class Train_Dataset(Dataset):
 
-    def __init__(self, data, label, transform = None, num_classes = 10, noise_or_not=None,
+    def __init__(self, data, label, transform = None, num_classes = 10,
                  noise_type='symmetric', noise_rate=0.5, select_class=-1):
 
         self.num_classes = num_classes
@@ -80,10 +76,7 @@ class Train_Dataset(Dataset):
 
         self.transform = transform
         self.train_noisy_labels = self.train_labels.copy()
-        if noise_type == 'none':
-            self.noise_or_not = noise_or_not
-        else:
-            self.noise_or_not = np.array([True for _ in range(len(self.train_labels))])
+        self.noise_or_not = np.array([True for _ in range(len(self.train_labels))])
         self.P = np.zeros((num_classes, num_classes))
 
         if noise_type !='none':

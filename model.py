@@ -1,20 +1,22 @@
 import torch.nn as nn
 import numpy as np
 from copy import deepcopy
-
 import torch
 
 
 def initialize_weights(module):
     if isinstance(module, nn.Conv2d):
         nn.init.kaiming_normal_(module.weight.data, mode='fan_out')
+    elif isinstance(module, nn.BatchNorm2d):
+        module.weight.data.fill_(1)
+        module.bias.data.zero_()
     elif isinstance(module, nn.BatchNorm1d):
         module.weight.data.fill_(1)
         module.bias.data.zero_()
     elif isinstance(module, nn.Linear):
         nn.init.xavier_uniform_(module.weight.data)
-        #module.bias.data.zero_()
-
+        if module.bias is not None:
+           module.bias.data.zero_()
 
 class ModelEMA(object):
     def __init__(self, args, model, decay):
@@ -78,14 +80,13 @@ class MLP_Net(nn.Module):
     def forward(self, x):
         return self.classifier(self.encoder(x))
 
-    def re_init(self):
-        self.encoder.apply(initialize_weights)
-        self.classifier.apply(initialize_weights)
-
-
-
     def forward_encoder(self, x):
         return self.encoder(x)
 
     def forward_classifier(self, x):
         return self.classifier(x)
+
+
+    def init(self):
+        self.encoder.apply(initialize_weights)
+        self.classifier.apply(initialize_weights)
