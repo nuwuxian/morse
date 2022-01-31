@@ -81,12 +81,25 @@ class our_match(object):
         unlabeled_indexs = []
 
         if not self.args.use_true_distribution:
-            probs, preds = torch.max(outs.data, 1)
-            for i in range(0, len(noisy_targets)):
-                if preds[i] == noisy_targets[i] and probs[i] > self.args.clean_theta:
-                    labeled_indexs.append(i)
-                else:
-                    unlabeled_indexs.append(i)
+            if self.args.clean_method == 'confidence':
+                probs, preds = torch.max(outs.data, 1)
+                for i in range(0, len(noisy_targets)):
+                    if preds[i] == noisy_targets[i] and probs[i] > self.args.clean_theta:
+                        labeled_indexs.append(i)
+                    else:
+                        unlabeled_indexs.append(i)
+                        
+            elif self.args.clean_method == 'small_loss':
+                 for cls in range(self.args.num_class):
+                     idx = np.where(noisy_targets==cls)[0]
+                     loss_cls = outs[idx]
+                     sorted, indices = torch.sort(loss_cls, descending=False)
+                     select_num = int(len(indices) * 0.15)
+                     for i in range(len(indices)):
+                         if i < select_num:
+                            labeled_indexs.append(idx[indices[i].item()])
+                         else:
+                            unlabeled_indexs.append(idx[indices[i].item()])
         else:
             for cls in range(self.args.num_class):
                 idx = np.where(noisy_targets == cls)[0]
@@ -256,7 +269,6 @@ class our_match(object):
                 Lu = (F.cross_entropy(logits_u_s, targets_u, weight=weight,
                                       reduction='none') * mask).mean()
             loss = Lx + self.args.lambda_u * Lu
-            print(Lx.item(), Lu.item())
             # update model
             self.optimizer.zero_grad()
             loss.backward()
