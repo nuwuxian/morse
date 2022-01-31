@@ -60,7 +60,7 @@ parser.add_argument('--use-ema', action='store_true', default=False,
 parser.add_argument('--ema-decay', default=0.999, type=float,
                         help='EMA decay rate')
 # divide data into clean / noise 
-parser.add_argument('--clean_method', default='consistency', type=str)
+parser.add_argument('--clean_method', default='small_loss', type=str)
 parser.add_argument('--clean_theta', default=0.95, type=float)
 
 # imbalance method
