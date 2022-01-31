@@ -187,13 +187,23 @@ class AverageMeter(object):
         self.count += n
         self.avg = self.sum / self.count
 
-def predict_dataset_softmax(predict_loader, model, device):
+def predict_dataset_softmax(predict_loader, model, device, type='confidence'):
     model.eval()
-    softmax_outs = []
-    with torch.no_grad():
-        for images1, _, _ in predict_loader:
-            images1 = images1.to(device)
-            logits1 = model(images1)
-            outputs = F.softmax(logits1, dim=1)
-            softmax_outs.append(outputs)
-    return torch.cat(softmax_outs, dim=0).cpu()
+    if type == 'confidence':
+        softmax_outs = []
+        with torch.no_grad():
+            for images1, _, _ in predict_loader:
+                images1 = images1.to(device)
+                logits1 = model(images1)
+                outputs = F.softmax(logits1, dim=1)
+                softmax_outs.append(outputs)
+        return torch.cat(softmax_outs, dim=0).to(device)
+    else:
+         loss_outs = torch.zeros(train_num).to(device)
+         with torch.no_grad():
+            for images1, label, idx in predict_loader:
+                images1 = images1.to(device)
+                logits1 = model(images1)
+                loss = nn.CrossEntropyLoss(reduce=False)(logits1, label)
+                loss_outs[idx] = loss
+         return loss_outs
