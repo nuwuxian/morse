@@ -64,11 +64,11 @@ parser.add_argument('--clean_method', default='consistency', type=str)
 parser.add_argument('--clean_theta', default=0.95, type=float)
 
 # imbalance method
-parser.add_argument('--imb_method', default='mixup', type=str)   # none / re-sample / mixup / LDAM loss
+parser.add_argument('--imb_method', default='resample', type=str)   # none / re-sample / mixup / LDAM loss
 # mixup alpha
 parser.add_argument('--alpha', default=10, type=int)
 parser.add_argument('--pretrain_path', default=None, type=str)
-parser.add_argument('--use_true_distribution', default=True, type=bool)
+parser.add_argument('--use_true_distribution', default=False, type=bool)
 parser.add_argument('--unlabel_reweight', default=True, type=bool)
 
 # kmeans 
@@ -104,7 +104,6 @@ exp_name = args.seed
 SAVE_DIR  = osp.join(out_dir, '{}-{}'.format(timestamp, exp_name))
 os.makedirs(SAVE_DIR, exist_ok=True)
 
-
 # check if gpu training is available
 if torch.cuda.is_available():
    args.device = torch.device('cuda')
@@ -116,7 +115,6 @@ else:
 
 
 model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=nn.BatchNorm1d)
-
 
 if args.pretrain_path != None:
    pretrained_state = torch.load(args.pretrain_path, map_location=torch.device('cpu'))['state_dict']
@@ -140,7 +138,7 @@ else:
                                 weight_decay=args.weight_decay, nesterov=args.nesterov)
 # Cosin Learning Rates
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-            milestones=[10, 90], gamma=0.3, last_epoch=-1)
+            milestones=[10, 90], gamma=0.1, last_epoch=-1)
 
 dist = [0.14, 0.15, 0.15, 0.12, 0.15, 0.09, 0.01, 0.12, 0.03, 0.02, 0.01, 0.01]
 

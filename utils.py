@@ -94,8 +94,6 @@ def noniterate_detection(args, data_set, train_dataset, sel_noisy=[]):
 
     return sel_noisy, sel_clean, data_set['index']
 
- 
-
 
 def noise_detect(model, train_loader, train_dataset, args):
 

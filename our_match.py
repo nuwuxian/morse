@@ -136,7 +136,7 @@ class our_match(object):
         #u_batch = int(self.args.batch_size * min(6,  unlabeled_num * 1.0 / labeled_num))
         u_batch = self.args.batch_size * 6
 
-        if self.args.imb_method == 'resample' or 'mixup':
+        if self.args.imb_method == 'resample' or self.args.imb_method == 'mixup':
             labeled_sampler =  ImbalancedDatasetSampler(labeled_dataset)
             labeled_loader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=False,
                                         num_workers=self.args.num_workers, pin_memory=True, sampler=labeled_sampler,
@@ -234,7 +234,7 @@ class our_match(object):
             elif self.args.imb_method == 'LDAM':
                # LADM algorithm
                logits_x = self.model(inputs_x)
-               Lx = self.criterion(logits_x, targets_x)
+               Lx = self.criterion(logits_x, targets_x, reduction='mean')
 
             pseudo_label = torch.softmax(logits_u_w.detach()/self.args.T, dim=-1)
 
@@ -249,9 +249,14 @@ class our_match(object):
                 weight = self.per_cls_weights
             else:
                 weight = None
-            Lu = (F.cross_entropy(logits_u_s, targets_u, weight=weight,
-                                  reduction='none') * mask).mean()
+
+            if self.args.imb_method == 'LDAM':
+                Lu = (self.criterion(logits_u_s, targets_u, reduction='none') * mask).mean()
+            else:
+                Lu = (F.cross_entropy(logits_u_s, targets_u, weight=weight,
+                                      reduction='none') * mask).mean()
             loss = Lx + self.args.lambda_u * Lu
+            print(Lx.item(), Lu.item())
             # update model
             self.optimizer.zero_grad()
             loss.backward()
