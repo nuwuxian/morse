@@ -60,15 +60,15 @@ parser.add_argument('--use-ema', action='store_true', default=False,
 parser.add_argument('--ema-decay', default=0.999, type=float,
                         help='EMA decay rate')
 # divide data into clean / noise 
-parser.add_argument('--clean_method', default='small_loss', type=str)
+parser.add_argument('--clean_method', default='confidence', type=str)
 parser.add_argument('--clean_theta', default=0.95, type=float)
 
 # imbalance method
-parser.add_argument('--imb_method', default='resample', type=str)   # none / re-sample / mixup / LDAM loss
+parser.add_argument('--imb_method', default='LDAM', type=str)   # none / re-sample / mixup / LDAM loss
 # mixup alpha
-parser.add_argument('--alpha', default=10, type=int)
+parser.add_argument('--alpha', default=0.5, type=int)
 parser.add_argument('--pretrain_path', default=None, type=str)
-parser.add_argument('--use_true_distribution', default=False, type=bool)
+parser.add_argument('--use_true_distribution', default=True, type=bool)
 parser.add_argument('--unlabel_reweight', default=True, type=bool)
 
 # kmeans 

@@ -149,7 +149,7 @@ class our_match(object):
         #u_batch = int(self.args.batch_size * min(6,  unlabeled_num * 1.0 / labeled_num))
         u_batch = self.args.batch_size * 6
 
-        if self.args.imb_method == 'resample' or self.args.imb_method == 'mixup':
+        if self.args.imb_method == 'resample' or 'mixup':
             labeled_sampler =  ImbalancedDatasetSampler(labeled_dataset)
             labeled_loader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=False,
                                         num_workers=self.args.num_workers, pin_memory=True, sampler=labeled_sampler,
@@ -263,11 +263,8 @@ class our_match(object):
             else:
                 weight = None
 
-            if self.args.imb_method == 'LDAM':
-                Lu = (self.criterion(logits_u_s, targets_u, reduction='none') * mask).mean()
-            else:
-                Lu = (F.cross_entropy(logits_u_s, targets_u, weight=weight,
-                                      reduction='none') * mask).mean()
+            Lu = (F.cross_entropy(logits_u_s, targets_u, weight=weight,
+                                                         reduction='none') * mask).mean()
             loss = Lx + self.args.lambda_u * Lu
             # update model
             self.optimizer.zero_grad()
