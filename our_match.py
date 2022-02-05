@@ -11,6 +11,7 @@ from sklearn.metrics import confusion_matrix
 from utils import AverageMeter, predict_dataset_softmax
 from dataset import Train_Dataset, Semi_Labeled_Dataset, Semi_Unlabeled_Dataset,  ImbalancedDatasetSampler
 from torch.utils.data import DataLoader
+from losses import LDAMLoss
 
 class our_match(object):
 
@@ -30,13 +31,20 @@ class our_match(object):
         self.writer = SummaryWriter()
         self.update_cnt = 0
         # Distribution of noisy data
-        self.dist = np.array(kwargs['dist'])
-        self.cls_threshold = self.dist * self.args.threshold / max(self.dist)
-        self.cls_threshold = torch.Tensor(self.cls_threshold).to(self.args.device)
-        self.criterion = nn.CrossEntropyLoss().to(self.args.device)
-
-        self.adjustments = torch.Tensor(np.log(self.dist + 1e-12)).to(self.args.device)
-
+        self.dist = kwargs['dist']
+        self.cls_threshold = np.array(self.dist) * self.args.threshold / max(self.dist)
+        self.cls_threshold = torch.Tensor(self.cls_threshold).to(self.args.device) 
+        if self.args.imb_method == 'resample' or self.args.imb_method == 'mixup':
+           self.criterion = nn.CrossEntropyLoss().to(self.args.device)
+        elif self.args.imb_method == 'LDAM':
+           cls_num_list = np.array(self.dist) * 600
+           beta = 0.9999
+           effective_num = 1.0 - np.power(beta, cls_num_list)
+           per_cls_weights = (1.0 - beta) / np.array(effective_num)
+           per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
+           per_cls_weights = torch.FloatTensor(per_cls_weights).to(self.args.device)
+           self.criterion = LDAMLoss(cls_num_list=cls_num_list, max_m=0.5, s=30, \
+                                     device=self.args.device, weight=per_cls_weights).to(self.args.device)
     def aug(self, input, aug_type):
         mask_ratio = []
         if aug_type == 'weak':
@@ -141,7 +149,7 @@ class our_match(object):
         #u_batch = int(self.args.batch_size * min(6,  unlabeled_num * 1.0 / labeled_num))
         u_batch = self.args.batch_size * 6
 
-        if True:
+        if self.args.imb_method == 'resample' or self.args.imb_method == 'mixup':
             labeled_sampler =  ImbalancedDatasetSampler(labeled_dataset)
             labeled_loader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=False,
                                         num_workers=self.args.num_workers, pin_memory=True, sampler=labeled_sampler,
@@ -159,7 +167,7 @@ class our_match(object):
         per_cls_weights = labeled_sampler.per_cls_weights
 
         self.per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * self.args.num_class
-        self.per_cls_weights = torch.FloatTensor(self.per_cls_weights).to(self.args.device)
+        self.per_cls_weights = torch.FloatTensor(per_cls_weights).to(self.args.device)
         print('Labeled num is %d Unlabled num is %d' %(labeled_num, unlabeled_num))
 
         return labeled_loader, labeled_balanced_loader, unlabeled_loader
@@ -238,9 +246,8 @@ class our_match(object):
 
             elif self.args.imb_method == 'LDAM':
                # LADM algorithm
-               logits_bx = self.model(inputs_bx)
-               logits_bx += self.adjustments
-               Lx = F.cross_entropy(logits_bx, targets_bx, reduction='mean')
+               logits_x = self.model(inputs_x)
+               Lx = self.criterion(logits_x, targets_x, reduction='mean')
 
             pseudo_label = torch.softmax(logits_u_w.detach()/self.args.T, dim=-1)
 
@@ -256,8 +263,11 @@ class our_match(object):
             else:
                 weight = None
 
-            Lu = (F.cross_entropy(logits_u_s, targets_u, weight=weight,
-                                                         reduction='none') * mask).mean()
+            if self.args.imb_method == 'LDAM':
+                Lu = (self.criterion(logits_u_s, targets_u, reduction='none') * mask).mean()
+            else:
+                Lu = (F.cross_entropy(logits_u_s, targets_u, weight=weight,
+                                      reduction='none') * mask).mean()
             loss = Lx + self.args.lambda_u * Lu
             # update model
             self.optimizer.zero_grad()

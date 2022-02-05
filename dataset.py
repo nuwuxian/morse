@@ -15,7 +15,7 @@ def get_dataset(root, dataset, num_classes=10):
     clean_data = np.load(root + '/' + dataset +'_true.npz')
     clean_labels = clean_data['y_train']
     
-    dataset_train = Train_Dataset(train_data, train_labels, num_classes=12, noise_type='none')
+    dataset_train = Train_Dataset(train_data, train_labels, num_classes=10, noise_type='none')
     dataset_test = Test_Dataset(test_data, test_labels)
 
 
