@@ -41,7 +41,12 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
         for idx in self.indices:
             label = self._get_label(dataset, idx)
             label_to_count[label] += 1
-            
+        # padding 1
+        for cls in range(12):
+            if label_to_count[cls] == 0:
+                label_to_count[cls] = 1
+
+        self.label_to_count = label_to_count
         beta = 0.9999
         effective_num = 1.0 - np.power(beta, label_to_count)
         per_cls_weights = (1.0 - beta) / np.array(effective_num)

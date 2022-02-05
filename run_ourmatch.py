@@ -11,7 +11,7 @@ from our_match import our_match
 import torch.nn as nn
 
 from os import path as osp
-from utils import make_timestamp, noise_detect
+from utils import make_timestamp
 from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser()
@@ -60,19 +60,16 @@ parser.add_argument('--use-ema', action='store_true', default=False,
 parser.add_argument('--ema-decay', default=0.999, type=float,
                         help='EMA decay rate')
 # divide data into clean / noise 
-parser.add_argument('--clean_method', default='small_loss', type=str)
+parser.add_argument('--clean_method', default='confidence', type=str)
 parser.add_argument('--clean_theta', default=0.95, type=float)
 
 # imbalance method
-parser.add_argument('--imb_method', default='resample', type=str)   # none / re-sample / mixup / LDAM loss
+parser.add_argument('--imb_method', default='LDAM', type=str)   # none / re-sample / mixup / LDAM loss
 # mixup alpha
 parser.add_argument('--alpha', default=10, type=int)
-parser.add_argument('--pretrain_path', default=None, type=str)
 parser.add_argument('--use_true_distribution', default=False, type=bool)
 parser.add_argument('--unlabel_reweight', default=True, type=bool)
 
-# kmeans 
-parser.add_argument('--k', default=10, type=int)
 
 args = parser.parse_args()
 root = './data'
@@ -116,16 +113,6 @@ else:
 
 model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=nn.BatchNorm1d)
 
-if args.pretrain_path != None:
-   pretrained_state = torch.load(args.pretrain_path, map_location=torch.device('cpu'))['state_dict']
-   model_state = model.state_dict()
-   pretrained_state = { k:v for k,v in pretrained_state.items() if k in model_state and v.size() == model_state[k].size() }
-   model_state.update(pretrained_state)
-   model.load_state_dict(model_state)
-
-   # noise_detect
-   noise_detect(model, train_loader, train_dataset, args)
-
 ema_model = None
 if args.use_ema:
     from model import ModelEMA
@@ -138,7 +125,7 @@ else:
                                 weight_decay=args.weight_decay, nesterov=args.nesterov)
 # Cosin Learning Rates
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-            milestones=[10, 90], gamma=0.1, last_epoch=-1)
+            milestones=[10, 60], gamma=0.1, last_epoch=-1)
 
 dist = [0.14, 0.15, 0.15, 0.12, 0.15, 0.09, 0.01, 0.12, 0.03, 0.02, 0.01, 0.01]
 
