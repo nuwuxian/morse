@@ -48,15 +48,15 @@ class our_match(object):
         ret = []
         for i in range(len(mask_ratio)):
             ratio = mask_ratio[i]
-            prob = torch.zeros_like(input).fill_(ratio)
+            prob = torch.zeros_like(input).fill_(ratio).to(self.args.device)
             m = torch.bernoulli(prob)
             no, dim = input.shape
             # Randomly (and column-wise) shuffle data
             x_bar = np.zeros([no, dim])
             for i in range(dim):
                 idx = np.random.permutation(no)
-                x_bar[:, i] = input[idx, i]
-            x_bar = torch.Tensor(x_bar)
+                x_bar[:, i] = input.data.cpu()[idx, i]
+            x_bar = torch.Tensor(x_bar).to(self.args.device)
 
             # Corrupt samples
             x_tilde = input * m + x_bar * (1 - m)
