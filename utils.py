@@ -2,10 +2,40 @@ import numpy as np
 import torch
 import datetime
 import torch.nn.functional as F
-
+import torch.nn as nn
 def make_timestamp():
     ISO_TIMESTAMP = "%Y%m%d_%H%M%S"
     return datetime.datetime.now().strftime(ISO_TIMESTAMP)
+
+def debug_label_info(pred, gt):
+    idx = np.where(gt == 0)[0]
+    cls_proportion = []
+
+    for cls in range(12):
+        proportion = np.sum(pred[idx] == cls) * 1.0 / len(idx)
+        cls_proportion.append(proportion)
+    return cls_proportion
+
+
+def debug_unlabel_info(pred, gt, mask):
+    pred = pred.data.cpu().numpy()
+    gt = gt.data.cpu().numpy()
+    mask = mask.data.cpu().numpy()
+    # select the true data
+    idx = np.where(mask == True)[0]
+    pred = pred[idx]
+    gt = gt[idx]
+    cls = [0, 11]
+    debug_ratio = []
+
+    for i in range(len(cls)):
+        cls_id = cls[i]
+        idx = np.where(gt == cls_id)[0]
+        debug_ratio.append(np.sum(pred[idx] == cls[i]) * 1.0 / len(idx))
+        debug_ratio.append(np.sum(pred[idx] == cls[1-i]) * 1.0 / len(idx))
+
+    return debug_ratio
+
 # Cosine learning rate scheduler.
 #
 # From https://github.com/valencebond/FixMatch_pytorch/blob/master/lr_scheduler.py
@@ -70,7 +100,7 @@ class AverageMeter(object):
         self.count += n
         self.avg = self.sum / self.count
 
-def predict_dataset_softmax(predict_loader, model, device, type='confidence'):
+def predict_dataset_softmax(predict_loader, model, device, train_num, type='confidence'):
     model.eval()
     if type == 'confidence':
         softmax_outs = []

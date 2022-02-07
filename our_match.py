@@ -8,7 +8,7 @@ import torch.distributions.categorical as cat
 from torch.utils.tensorboard import SummaryWriter
 import sys
 from sklearn.metrics import confusion_matrix
-from utils import AverageMeter, predict_dataset_softmax
+from utils import AverageMeter, debug_label_info, debug_unlabel_info, predict_dataset_softmax
 from dataset import Train_Dataset, Semi_Labeled_Dataset, Semi_Unlabeled_Dataset,  ImbalancedDatasetSampler
 from torch.utils.data import DataLoader
 from losses import LDAMLoss
@@ -110,9 +110,8 @@ class our_match(object):
         return labeled_indexs, unlabeled_indexs
 
     def update_loader(self, train_loader, train_data, clean_targets, noisy_targets):
-
         if self.args.clean_method != 'ema':
-           soft_outs = predict_dataset_softmax(train_loader, self.model, self.args.device)
+           soft_outs = predict_dataset_softmax(train_loader, self.model, self.args.device, self.train_num)
         else:
            soft_outs = self.args.ema_prob
 
@@ -126,16 +125,16 @@ class our_match(object):
         clean_num = np.sum(noisy_targets[labeled_indexs]==clean_targets[labeled_indexs])
         clean_ratio = clean_num * 1.0 / labeled_num
 
-        prob_cls = range(0, self.args.num_class)
         noise_label = noisy_targets[labeled_indexs]
         clean_label = clean_targets[labeled_indexs]
-        for cls in prob_cls:
-            idx = np.where(noise_label == cls)[0]
-            clean_ratio = np.sum(clean_label[idx] == cls) * 1.0 / len(idx)
-            self.writer.add_scalar('Class_'+str(cls), clean_ratio, self.update_cnt)
 
-        self.writer.add_scalar('Labeled_clean_ratio', clean_ratio, global_step=self.update_cnt)
-        self.writer.add_scalar('Labeled_num', labeled_num, global_step=self.update_cnt)
+        cls_precision = debug_label_info(noise_label, clean_label)
+        att_cls = [0, 4, 11]
+        for idx in range(len(att_cls)):
+          cls = att_cls[idx]
+          self.writer.add_scalar('Label_0_' + str(cls), cls_precision[cls], global_step=self.update_cnt)
+        self.writer.add_scalar('Label_clean_ratio', clean_ratio, global_step=self.update_cnt)
+        self.writer.add_scalar('Label_num', labeled_num, global_step=self.update_cnt)
 
         l_batch = self.args.batch_size
         u_batch = self.args.batch_size * 6
@@ -150,25 +149,20 @@ class our_match(object):
         imb_labeled_loader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=False,
                              num_workers=self.args.num_workers, pin_memory=True, sampler=imb_labeled_sampler,
                              drop_last=True)
-        per_cls_weights = imb_labeled_sampler.per_cls_weights
 
+        self.per_cls_weights = None
         # update criterion
-        if self.args.imb_method == 'LDAM':
+        if self.args.imb_method == 'reweight':
            cls_num_list = imb_labeled_sampler.label_to_count
-           if self.update_cnt >= 60:
+           if self.update_cnt >= self.args.reweight_start:
               beta = 0.9999
            else:
               beta = 0
-           print('beta is %f' % beta)
            effective_num = 1.0 - np.power(beta, cls_num_list)
            per_cls_weights = (1.0 - beta) / np.array(effective_num)
            per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
            per_cls_weights = torch.FloatTensor(per_cls_weights).to(self.args.device)
            self.per_cls_weights = per_cls_weights
-           self.criterion = LDAMLoss(cls_num_list=cls_num_list, max_m=0.5, s=30, \
-                                     device=self.args.device, weight=per_cls_weights).to(self.args.device)
-
-
         print('Labeled num is %d Unlabled num is %d' %(labeled_num, unlabeled_num))
 
         return labeled_loader,  unlabeled_loader, imb_labeled_loader
@@ -183,10 +177,9 @@ class our_match(object):
             if i < self.args.warmup:
                 self.warmup(i, trainloader)
             else:
+                labeled_loader, unlabeled_loader, imb_labeled_loader = self.update_loader(trainloader, train_data, clean_targets, noisy_targets)
                 if i == self.args.warmup and not self.args.use_pretrain:
                     self.model.init()
-
-                labeled_loader, unlabeled_loader, imb_labeled_loader = self.update_loader(trainloader, train_data, clean_targets, noisy_targets)
                 self.ourmatch_train(i, labeled_loader, unlabeled_loader, imb_labeled_loader)
 
                 self.update_cnt += 1
@@ -212,81 +205,81 @@ class our_match(object):
         losses_x = AverageMeter()
         losses_u = AverageMeter()
 
+        debug_list = [AverageMeter() for _ in range(4)]
+
         for batch_idx, (b_l, b_u, b_imb_l) in enumerate(zip(labeled_loader, unlabeled_loader, imb_labeled_loader)):
-            # unpack b_l, b_u, b_imb_l
-            inputs_x, targets_x = b_l
-            inputs_u, gts_u = b_u
-            inputs_imb_x, targets_imb_x = b_imb_l
+                # unpack b_l, b_u, b_imb_l
+                inputs_x, targets_x = b_l
+                inputs_u, gts_u = b_u
+                inputs_imb_x, targets_imb_x = b_imb_l
 
-            # shifit to gpu/cpu
-            inputs_x, inputs_u, inputs_imb_x = inputs_x.to(self.args.device), inputs_u.to(self.args.device), inputs_imb_x.to(self.args.device)
-            targets_x, targets_u, targets_imb_x = targets_x.to(self.args.device), targets_x.to(self.args.device), targets_imb_x.to(self.args.device)
+                # shifit to gpu/cpu
+                inputs_x, inputs_u, inputs_imb_x = inputs_x.to(self.args.device), inputs_u.to(self.args.device), inputs_imb_x.to(self.args.device)
+                targets_x, targets_u, targets_imb_x = targets_x.to(self.args.device), targets_x.to(self.args.device), targets_imb_x.to(self.args.device)
 
-            inputs_x = self.aug(inputs_x, 'weak')
-            inputs_imb_x = self.aug(inputs_imb_x, 'weak')
-            inputs_u, inputs_u2 = self.aug(inputs_u, 'weak_strong')
+                inputs_x = self.aug(inputs_x, 'weak')
+                inputs_imb_x = self.aug(inputs_imb_x, 'weak')
+                inputs_u, inputs_u2 = self.aug(inputs_u, 'weak_strong')
 
-            logits_u_w = self.model(inputs_u)
-            logits_u_s = self.model(inputs_u2)
+                logits_u_w = self.model(inputs_u)
+                logits_u_s = self.model(inputs_u2)
 
-            if self.args.imb_method == 'resample':
-               logits_imb_x = self.model(inputs_imb_x)
-               Lx = F.cross_entropy(logits_imb_x, targets_imb_x, reduction='mean')
+                if self.args.imb_method == 'resample':
+                   logits_imb_x = self.model(inputs_imb_x)
+                   Lx = F.cross_entropy(logits_imb_x, targets_imb_x, reduction='mean')
 
-            elif self.args.imb_method == 'mixup':
-               lam = np.random.beta(self.args.alpha, self.args.alpha)
-               lam = max(lam, 1 - lam)
-               idx = torch.randperm(inputs_x.size()[0])
-               # mixup in hidden-layers
-               mix_x = self.model.forward_encoder(inputs_imb_x) * lam + \
-                        (1 - lam) * self.model.forward_encoder(inputs_x)
-               mix_logits = self.model.forward_classifier(mix_x)
-               Lx = self.mixup_criterion(self.criterion, mix_logits, targets_imb_x, targets_x[idx], lam)
+                elif self.args.imb_method == 'mixup':
+                   lam = np.random.beta(self.args.alpha, self.args.alpha)
+                   lam = max(lam, 1 - lam)
+                   idx = torch.randperm(inputs_x.size()[0])
+                   # mixup in hidden-layers
+                   mix_x = self.model.forward_encoder(inputs_imb_x) * lam + \
+                            (1 - lam) * self.model.forward_encoder(inputs_x)
+                   mix_logits = self.model.forward_classifier(mix_x)
+                   Lx = self.mixup_criterion(self.criterion, mix_logits, targets_imb_x, targets_x[idx], lam)
 
-            elif self.args.imb_method == 'LDAM':
-               # LADM algorithm
-               logits_x = self.model(inputs_x)
-               Lx = self.criterion(logits_x, targets_x, reduction='mean')
+                elif self.args.imb_method == 'reweight':
+                  logits_x = self.model(inputs_x)
+                  Lx = F.cross_entropy(logits_x, targets_x, weight=self.per_cls_weights, reduction='mean')
 
-            pseudo_label = torch.softmax(logits_u_w.detach()/self.args.T, dim=-1)
+                pseudo_label = torch.softmax(logits_u_w.detach()/self.args.T, dim=-1)
+                max_probs, targets_u = torch.max(pseudo_label, dim=-1)
 
-            max_probs, targets_u = torch.max(pseudo_label, dim=-1)
+                if self.args.use_pretrain:
+                   mask = max_probs.ge(self.args.threshold).float().to(self.args.device)
+                else:
+                   # class specific threshold
+                   mask = max_probs.ge(self.cls_threshold[targets_u]).float().to(self.args.device)
 
-            if self.args.use_pretrain:
-               mask = max_probs.ge(self.args.threshold).float().to(self.args.device)
-            else:
-               # class specific threshold
-               mask = max_probs.ge(self.cls_threshold[targets_u]).float().to(self.args.device)
-            if self.args.unlabel_reweight:
-                weight = self.per_cls_weights
-            else:
-                weight = None
+                debug_ratio = debug_unlabel_info(targets_u, gts_u, mask)
+                for i in range(len(debug_list)):
+                  debug_list[i].update(debug_ratio[i])
 
-            if self.args.imb_method == 'LDAM':
-                Lu = (self.criterion(logits_u_s, targets_u, reduction='none') * mask).mean()
-            else:
-                Lu = (F.cross_entropy(logits_u_s, targets_u, weight=weight,
-                                      reduction='none') * mask).mean()
-            loss = Lx + self.args.lambda_u * Lu
+                Lu = (F.cross_entropy(logits_u_s, targets_u, weight=self.per_cls_weights, reduction='none') * mask).mean()
+                loss = Lx + self.args.lambda_u * Lu
+                # update model
+                self.optimizer.zero_grad()
+                loss.backward()
 
+                losses.update(loss.item())
+                losses_x.update(Lx.item())
+                losses_u.update(Lu.item())
 
-            # update model
-            self.optimizer.zero_grad()
-            loss.backward()
-
-            losses.update(loss.item())
-            losses_x.update(Lx.item())
-            losses_u.update(Lu.item())
-
-            self.optimizer.step()
-            if self.args.use_ema:
-               self.ema_model.update(self.model)
+                self.optimizer.step()
+                if self.args.use_ema:
+                   self.ema_model.update(self.model)
 
         print('Epoch [%3d/%3d] \t Losses: %.8f, Losses_x: %.8f Losses_u: %.8f'% (epoch, self.args.epoch, losses.avg, losses_x.avg, losses_u.avg))
         # write into tensorboard
         self.writer.add_scalar('Loss', losses.avg, self.update_cnt)
         self.writer.add_scalar('Loss_x', losses_x.avg, self.update_cnt)
         self.writer.add_scalar('Loss_u', losses_u.avg, self.update_cnt)
+        # debug info
+        self.writer.add_scalar('UnLabel_class-0_clean', debug_list[0].avg, self.update_cnt)
+        self.writer.add_scalar('UnLabel_class-0_noise', debug_list[1].avg, self.update_cnt)
+        self.writer.add_scalar('UnLabel_class-11_clean', debug_list[2].avg, self.update_cnt)
+        self.writer.add_scalar('UnLabel_class-11_noise', debug_list[3].avg, self.update_cnt)
+
 
     def warmup(self, epoch, trainloader):
         self.model.train()
@@ -360,6 +353,8 @@ class our_match(object):
         acc = 100 * float(correct) / float(total)
         print(class_acc)
         print('Epoch [%3d/%3d] Test Acc: %.2f%%' %(epoch, self.args.epoch, acc))
+        self.writer.add_scalar('Test Class-0 acc', class_acc[0], epoch)
+        self.writer.add_scalar('Test Class-11 acc', class_acc[11], epoch)
         self.writer.add_scalar('Test Acc',  acc, epoch)
 
         return acc, class_acc

@@ -30,7 +30,7 @@ parser.add_argument('--input_dim', type=int, default=1024)
 parser.add_argument('--gamma', type=float, default=0.95, metavar='M',help='Learning rate step gamma (default: 0.7)')
 parser.add_argument('--dataset', type = str, help = 'mnist, cifar10, cifar100, or imagenet_tiny', default = 'malware')
 
-parser.add_argument('--epoch', type=int, default=120)
+parser.add_argument('--epoch', type=int, default=140)
 parser.add_argument('--warmup', type=int, default=10)
 parser.add_argument('--optimizer', type = str, default='adam')
 parser.add_argument('--cuda', type = int, default=1)
@@ -64,7 +64,8 @@ parser.add_argument('--clean_method', default='confidence', type=str)
 parser.add_argument('--clean_theta', default=0.95, type=float)
 
 # imbalance method
-parser.add_argument('--imb_method', default='LDAM', type=str)   # none / re-sample / mixup / LDAM loss
+parser.add_argument('--imb_method', default='reweight', type=str)   # resample / mixup / reweight
+parser.add_argument('--reweight_start', default=0, type=int)
 # mixup alpha
 parser.add_argument('--alpha', default=10, type=int)
 parser.add_argument('--use_true_distribution', default=False, type=bool)
@@ -125,7 +126,7 @@ else:
                                 weight_decay=args.weight_decay, nesterov=args.nesterov)
 # Cosin Learning Rates
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-            milestones=[10, 60], gamma=0.1, last_epoch=-1)
+            milestones=[60, 100], gamma=0.1, last_epoch=-1)
 
 dist = [0.14, 0.15, 0.15, 0.12, 0.15, 0.09, 0.01, 0.12, 0.03, 0.02, 0.01, 0.01]
 
