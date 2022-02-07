@@ -337,11 +337,11 @@ class our_match(object):
                 _, pred = torch.max(outputs.data, 1)
 
                 total += y.size(0)
-                correct += (pred.cpu() == y.long()).sum()
+                correct += (pred.cpu() == y.cpu().long()).sum()
 
                 # add pred1 | labels
                 model_preds.append(pred.cpu())
-                model_true.append(y.long())
+                model_true.append(y.cpu().long())
 
         model_preds = np.concatenate(model_preds, axis=0)
         model_true = np.concatenate(model_true, axis=0)
