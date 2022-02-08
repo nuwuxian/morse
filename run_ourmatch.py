@@ -30,7 +30,7 @@ parser.add_argument('--input_dim', type=int, default=1024)
 parser.add_argument('--gamma', type=float, default=0.95, metavar='M',help='Learning rate step gamma (default: 0.7)')
 parser.add_argument('--dataset', type = str, help = 'mnist, cifar10, cifar100, or imagenet_tiny', default = 'malware')
 
-parser.add_argument('--epoch', type=int, default=140)
+parser.add_argument('--epoch', type=int, default=120)
 parser.add_argument('--warmup', type=int, default=10)
 parser.add_argument('--optimizer', type = str, default='adam')
 parser.add_argument('--cuda', type = int, default=1)
@@ -60,11 +60,14 @@ parser.add_argument('--clean_theta', default=0.95, type=float)
 
 # imbalance method
 parser.add_argument('--imb_method', default='reweight', type=str)   # resample / mixup / reweight
-parser.add_argument('--reweight_start', default=0, type=int)
+parser.add_argument('--reweight_start', default=50, type=int)
 # mixup alpha
 parser.add_argument('--alpha', default=10, type=int)
 parser.add_argument('--use_true_distribution', default=False, type=bool)
 parser.add_argument('--unlabel_reweight', default=True, type=bool)
+
+parser.add_argument('--use_scl', default=False, type=bool)
+parser.add_argument('--lambda-s', default=0.1, type=float)
 
 
 args = parser.parse_args()
@@ -106,7 +109,7 @@ else:
     args.device = torch.device('cpu')
     args.gpu_index = -1
 
-model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=nn.BatchNorm1d)
+model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=nn.BatchNorm1d, use_scl=args.use_scl)
 
 if args.optimizer == 'adam':
     optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.weight_decay)

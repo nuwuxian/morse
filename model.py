@@ -2,6 +2,7 @@ import torch.nn as nn
 import numpy as np
 from copy import deepcopy
 import torch
+import torch.nn.functional as F
 
 
 def initialize_weights(module):
@@ -53,13 +54,12 @@ class ModelEMA(object):
                 esd[k].copy_(msd[j])
 
 class MLP_Net(nn.Module):
-    def __init__(self, input_dim, hiddens, batch_norm=None):
+    def __init__(self, input_dim, hiddens, batch_norm=None, use_scl=False):
 
         super(MLP_Net, self).__init__()
 
         self.encoder = nn.Sequential()
         self.classifier = nn.Sequential()
-
 
         for i in range(len(hiddens)):
             bias = (batch_norm == None) or i == len(hiddens) - 1 
@@ -76,9 +76,20 @@ class MLP_Net(nn.Module):
 
             if i != len(hiddens) - 1:
                 self.encoder.add_module('relu_%d' %i, nn.ReLU())
+        if use_scl:
+           self.head = nn.Sequential(
+                nn.Linear(512, 512),
+                nn.ReLU(inplace=True),
+                nn.Linear(512, 256)
+           )
 
     def forward(self, x):
         return self.classifier(self.encoder(x))
+
+    def forward_feat(self, x):
+        feat = self.encoder(x)
+        feat = F.normalize(self.head(feat), dim=1)
+        return feat
 
     def forward_encoder(self, x):
         return self.encoder(x)

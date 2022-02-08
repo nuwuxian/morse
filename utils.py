@@ -25,15 +25,18 @@ def debug_unlabel_info(pred, gt, mask):
     idx = np.where(mask == True)[0]
     pred = pred[idx]
     gt = gt[idx]
-    cls = [0, 11]
+
     debug_ratio = []
+    class_0_idx = np.where(gt == 0)[0]
+    class_11_idx = np.where(gt == 11)[0]
 
-    for i in range(len(cls)):
-        cls_id = cls[i]
-        idx = np.where(gt == cls_id)[0]
-        debug_ratio.append(np.sum(pred[idx] == cls[i]) * 1.0 / len(idx))
-        debug_ratio.append(np.sum(pred[idx] == cls[1-i]) * 1.0 / len(idx))
+    for cls in range(12):
+        proportion = np.sum(pred[class_0_idx] == cls) * 1.0 / len(class_0_idx)
+        debug_ratio.append(proportion)
 
+    class_11_clean = np.sum(pred[class_11_idx] == 11) * 1.0 / len(class_11_idx)
+    debug_ratio.append(class_11_clean)
+    
     return debug_ratio
 
 # Cosine learning rate scheduler.
@@ -100,7 +103,7 @@ class AverageMeter(object):
         self.count += n
         self.avg = self.sum / self.count
 
-def predict_dataset_softmax(predict_loader, model, device, train_num, type='confidence'):
+def predict_dataset_softmax(predict_loader, model, device, train_num, type):
     model.eval()
     if type == 'confidence':
         softmax_outs = []

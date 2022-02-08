@@ -11,7 +11,7 @@ from sklearn.metrics import confusion_matrix
 from utils import AverageMeter, debug_label_info, debug_unlabel_info, predict_dataset_softmax
 from dataset import Train_Dataset, Semi_Labeled_Dataset, Semi_Unlabeled_Dataset,  ImbalancedDatasetSampler
 from torch.utils.data import DataLoader
-from losses import LDAMLoss
+from losses import LDAMLoss, SupConLoss
 
 class our_match(object):
 
@@ -31,8 +31,11 @@ class our_match(object):
         self.dist = kwargs['dist']
         self.cls_threshold = np.array(self.dist) * self.args.threshold / max(self.dist)
         self.cls_threshold = torch.Tensor(self.cls_threshold).to(self.args.device) 
+
         if self.args.imb_method == 'resample' or self.args.imb_method == 'mixup':
            self.criterion = nn.CrossEntropyLoss().to(self.args.device)
+        # SupConLoss
+        self.criterion_con = SupConLoss(temperature=0.07)
        
 
     def aug(self, input, aug_type):
@@ -108,7 +111,7 @@ class our_match(object):
 
     def update_loader(self, train_loader, train_data, clean_targets, noisy_targets):
         
-        soft_outs = predict_dataset_softmax(train_loader, self.model, self.args.device, self.train_num)
+        soft_outs = predict_dataset_softmax(train_loader, self.model, self.args.device, self.train_num, self.args.clean_method)
 
         labeled_indexs, unlabeled_indexs = self.splite_confident(soft_outs, clean_targets, noisy_targets)
         labeled_dataset = Semi_Labeled_Dataset(train_data[labeled_indexs], noisy_targets[labeled_indexs])
@@ -124,7 +127,7 @@ class our_match(object):
         clean_label = clean_targets[labeled_indexs]
 
         cls_precision = debug_label_info(noise_label, clean_label)
-        att_cls = [0, 4, 11]
+        att_cls = range(12)
         for idx in range(len(att_cls)):
           cls = att_cls[idx]
           self.writer.add_scalar('Label_0_' + str(cls), cls_precision[cls], global_step=self.update_cnt)
@@ -144,10 +147,9 @@ class our_match(object):
         imb_labeled_loader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=False,
                              num_workers=self.args.num_workers, pin_memory=True, sampler=imb_labeled_sampler,
                              drop_last=True)
-
         self.per_cls_weights = None
         # update criterion
-        if self.args.imb_method == 'reweight':
+        if self.args.imb_method == 'reweight' and self.args.reweight_start != -1:
            cls_num_list = imb_labeled_sampler.label_to_count
            if self.update_cnt >= self.args.reweight_start:
               beta = 0.9999
@@ -175,7 +177,7 @@ class our_match(object):
                 self.ourmatch_train(i, labeled_loader, unlabeled_loader, imb_labeled_loader)
 
                 self.update_cnt += 1
-                acc, class_acc = self.eval(testloader, eval_model, i)
+                acc, class_acc = self.eval(testloader, self.model, i)
                 if acc > best_acc:
                     best_acc = acc
                     np.savez_compressed(self.log_dir + '/best_results.npz', test_acc=best_acc, test_class_acc=class_acc,
@@ -189,8 +191,11 @@ class our_match(object):
         losses = AverageMeter()
         losses_x = AverageMeter()
         losses_u = AverageMeter()
+        losses_s = AverageMeter()
 
-        debug_list = [AverageMeter() for _ in range(4)]
+        # 0 -> 0, 1, ... 11
+        # 11 -> 11
+        debug_list = [AverageMeter() for _ in range(13)]
 
         for batch_idx, (b_l, b_u, b_imb_l) in enumerate(zip(labeled_loader, unlabeled_loader, imb_labeled_loader)):
                 # unpack b_l, b_u, b_imb_l
@@ -227,6 +232,12 @@ class our_match(object):
                   logits_x = self.model(inputs_x)
                   Lx = F.cross_entropy(logits_x, targets_x, weight=self.per_cls_weights, reduction='mean')
 
+                # Use Suploss
+                if self.args.use_scl:
+                    feat = self.model.forward_feat(inputs_x)
+                    feat = feat.unsqueeze(1)
+                    Ls = self.criterion_con(feat, targets_x)
+
                 pseudo_label = torch.softmax(logits_u_w.detach()/self.args.T, dim=-1)
                 max_probs, targets_u = torch.max(pseudo_label, dim=-1)
 
@@ -241,7 +252,10 @@ class our_match(object):
                   debug_list[i].update(debug_ratio[i])
 
                 Lu = (F.cross_entropy(logits_u_s, targets_u, weight=self.per_cls_weights, reduction='none') * mask).mean()
-                loss = Lx + self.args.lambda_u * Lu
+                if self.args.use_scl:
+                   loss = Lx + self.args.lambda_u * Lu + self.args.lambda_s * Ls
+                else:
+                   loss = Lx + self.args.lambda_u * Lu
                 # update model
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -249,6 +263,8 @@ class our_match(object):
                 losses.update(loss.item())
                 losses_x.update(Lx.item())
                 losses_u.update(Lu.item())
+                if self.args.use_scl:
+                    losses_s.update(Ls.item())
 
                 self.optimizer.step()
 
@@ -257,11 +273,13 @@ class our_match(object):
         self.writer.add_scalar('Loss', losses.avg, self.update_cnt)
         self.writer.add_scalar('Loss_x', losses_x.avg, self.update_cnt)
         self.writer.add_scalar('Loss_u', losses_u.avg, self.update_cnt)
-        # debug info
-        self.writer.add_scalar('UnLabel_class-0_clean', debug_list[0].avg, self.update_cnt)
-        self.writer.add_scalar('UnLabel_class-0_noise', debug_list[1].avg, self.update_cnt)
-        self.writer.add_scalar('UnLabel_class-11_clean', debug_list[2].avg, self.update_cnt)
-        self.writer.add_scalar('UnLabel_class-11_noise', debug_list[3].avg, self.update_cnt)
+        if self.args.use_scl:
+           self.writer.add_scalar('Loss_s', losses_s.avg, self.update_cnt)
+
+        for i in range(self.args.num_class):
+         # debug info
+         self.writer.add_scalar('UnLabel_class-0_' + str(i), debug_list[i].avg, self.update_cnt)
+        self.writer.add_scalar('UnLabel_class-11_clean', debug_list[12].avg, self.update_cnt)
 
 
     def warmup(self, epoch, trainloader):
