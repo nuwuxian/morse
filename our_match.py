@@ -19,9 +19,6 @@ class our_match(object):
         self.args = kwargs['args']
         # load model, ema_model, optimizer, scheduler
         self.model = kwargs['model'].to(self.args.device)
-        if self.args.use_ema:
-            self.ema_model = kwargs['ema_model'].ema.to(self.args.device)
-
         self.optimizer = kwargs['optimizer']
         self.scheduler = kwargs['scheduler']
 
@@ -110,10 +107,8 @@ class our_match(object):
         return labeled_indexs, unlabeled_indexs
 
     def update_loader(self, train_loader, train_data, clean_targets, noisy_targets):
-        if self.args.clean_method != 'ema':
-           soft_outs = predict_dataset_softmax(train_loader, self.model, self.args.device, self.train_num)
-        else:
-           soft_outs = self.args.ema_prob
+        
+        soft_outs = predict_dataset_softmax(train_loader, self.model, self.args.device, self.train_num)
 
         labeled_indexs, unlabeled_indexs = self.splite_confident(soft_outs, clean_targets, noisy_targets)
         labeled_dataset = Semi_Labeled_Dataset(train_data[labeled_indexs], noisy_targets[labeled_indexs])
@@ -168,10 +163,7 @@ class our_match(object):
         return labeled_loader,  unlabeled_loader, imb_labeled_loader
 
     def run(self, train_data, clean_targets, noisy_targets, trainloader, testloader):
-
         self.train_num = clean_targets.shape[0]
-        self.ema_prob = torch.zeros(self.train_num, self.args.num_class).to(self.args.device)
-
         best_acc = 0.0
         for i in range(self.args.epoch):
             if i < self.args.warmup:
@@ -189,13 +181,6 @@ class our_match(object):
                     np.savez_compressed(self.log_dir + '/best_results.npz', test_acc=best_acc, test_class_acc=class_acc,
                                         best_epoch=i)
             self.scheduler.step()
-            if self.args.use_ema:
-                eval_model = self.ema_model.ema
-            else:
-                eval_model = self.model
-
-            if self.args.clean_method == 'ema':
-               self.eval_train(trainloader, eval_model)
 
     def ourmatch_train(self, epoch, labeled_loader, unlabeled_loader, imb_labeled_loader):
 
@@ -266,8 +251,6 @@ class our_match(object):
                 losses_u.update(Lu.item())
 
                 self.optimizer.step()
-                if self.args.use_ema:
-                   self.ema_model.update(self.model)
 
         print('Epoch [%3d/%3d] \t Losses: %.8f, Losses_x: %.8f Losses_u: %.8f'% (epoch, self.args.epoch, losses.avg, losses_x.avg, losses_u.avg))
         # write into tensorboard
@@ -295,28 +278,11 @@ class our_match(object):
             loss = nn.CrossEntropyLoss()(logits, y)
             loss.backward()
             self.optimizer.step()
-            # update ema
-            if self.args.use_ema:
-               self.ema_model.update(self.model)
-            
             losses.update(loss.item(), len(logits))
 
             batch_idx += 1
 
         print('Epoch [%3d/%3d] Loss: %.2f' % (epoch, self.args.epoch, losses.avg))
-
-    def eval_train(self, trainloader, model):
-        model = model.eval()
-        prob = torch.zeros(self.train_num, self.args.num_class).to(self.args.device)
-
-        for i, (x, y, index) in enumerate(trainloader):
-            x = x.to(self.args.device)
-            y = y.to(self.args.device)
-
-            logits = model(x)
-            prob[index] = F.softmax(logits, dim=1)
-
-        self.ema_prob = self.ema_prob * self.args.ema_decay + (1 - self.args.ema_decay) * prob
 
     def eval(self, testloader, eval_model, epoch):
         eval_model.eval()  # Change model to 'eval' mode.

@@ -54,11 +54,6 @@ parser.add_argument('--threshold', default=0.95, type=float,
                         help='pseudo label threshold')
 # whether use the pretrain model
 parser.add_argument('--use_pretrain', default=True, type=bool)
-
-parser.add_argument('--use-ema', action='store_true', default=False,
-                        help='use EMA model')
-parser.add_argument('--ema-decay', default=0.999, type=float,
-                        help='EMA decay rate')
 # divide data into clean / noise 
 parser.add_argument('--clean_method', default='confidence', type=str)
 parser.add_argument('--clean_theta', default=0.95, type=float)
@@ -111,13 +106,7 @@ else:
     args.device = torch.device('cpu')
     args.gpu_index = -1
 
-
 model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=nn.BatchNorm1d)
-
-ema_model = None
-if args.use_ema:
-    from model import ModelEMA
-    ema_model = ModelEMA(args, model, args.ema_decay)
 
 if args.optimizer == 'adam':
     optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.weight_decay)
@@ -126,12 +115,12 @@ else:
                                 weight_decay=args.weight_decay, nesterov=args.nesterov)
 # Cosin Learning Rates
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-            milestones=[60, 100], gamma=0.1, last_epoch=-1)
+            milestones=[30, 60], gamma=0.5, last_epoch=-1)
 
 dist = [0.14, 0.15, 0.15, 0.12, 0.15, 0.09, 0.01, 0.12, 0.03, 0.02, 0.01, 0.01]
 
 with torch.cuda.device(args.gpu_index):
-    ourmatch = our_match(model=model, ema_model=ema_model, optimizer=optimizer, \
+    ourmatch = our_match(model=model, optimizer=optimizer, \
                          scheduler=lr_scheduler, logdir=SAVE_DIR, dist=dist, 
                          args=args)
     ourmatch.run(train_data, clean_targets, noisy_targets, \
