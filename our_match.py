@@ -255,9 +255,11 @@ class our_match(object):
                    # class specific threshold
                    mask = max_probs.ge(self.cls_threshold[targets_u]).float().to(self.args.device)
 
+                start_time = timeit.default_timer()
                 debug_ratio = debug_unlabel_info(targets_u, gts_u, mask)
                 for i in range(len(debug_list)):
                   debug_list[i].update(debug_ratio[i])
+                print('Debug Time: ', timeit.default_timer() - start_time)
 
                 Lu = (F.cross_entropy(logits_u_s, targets_u, weight=self.per_cls_weights, reduction='none') * mask).mean()
                 if self.args.use_scl:
