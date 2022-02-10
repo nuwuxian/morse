@@ -25,7 +25,7 @@ class our_match(object):
         self.threshold = self.args.threshold
         self.log_dir = kwargs['logdir']
         # tensorboard writer
-        self.writer = SummaryWriter()
+        self.writer = SummaryWriter(log_dir=self.log_dir)
         self.update_cnt = 0
         # Distribution of noisy data
         self.dist = kwargs['dist']

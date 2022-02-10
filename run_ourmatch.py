@@ -94,7 +94,8 @@ test_loader = torch.utils.data.DataLoader(
         num_workers=args.num_workers, pin_memory=True, drop_last=False)
 
 
-out_dir = 'output/'
+out_dir = 'output/Imb-method-' + str(args.imb_method) + '_reweight-start-' + str(args.reweight_start) \
+            + '_lr-' + str(args.lr) + '_weight-decay-' + str(args.weight_decay)
 timestamp = make_timestamp()
 exp_name = args.seed
 SAVE_DIR  = osp.join(out_dir, '{}-{}'.format(timestamp, exp_name))
