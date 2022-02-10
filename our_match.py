@@ -272,8 +272,6 @@ class our_match(object):
                 self.optimizer.zero_grad()
                 start_time = timeit.default_timer()
                 loss.backward()
-                print('Backward Time: ', timeit.default_timer() - start_time)
-
                 losses.update(loss.item())
                 losses_x.update(Lx.item())
                 losses_u.update(Lu.item())
@@ -281,6 +279,7 @@ class our_match(object):
                     losses_s.update(Ls.item())
 
                 self.optimizer.step()
+                print('Backward Time: ', timeit.default_timer() - start_time)
 
         print('Epoch [%3d/%3d] \t Losses: %.8f, Losses_x: %.8f Losses_u: %.8f'% (epoch, self.args.epoch, losses.avg, losses_x.avg, losses_u.avg))
         # write into tensorboard
