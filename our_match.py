@@ -204,9 +204,9 @@ class our_match(object):
         # 0 -> 0, 1, ... 11
         # 11 -> 11
         debug_list = [AverageMeter() for _ in range(13)]
+        start_time = timeit.default_timer()
 
         for batch_idx, (b_l, b_u, b_imb_l) in enumerate(zip(labeled_loader, unlabeled_loader, imb_labeled_loader)):
-                start_time = timeit.default_timer()
                 # unpack b_l, b_u, b_imb_l
                 inputs_x, targets_x = b_l
                 inputs_u, gts_u = b_u
@@ -256,21 +256,17 @@ class our_match(object):
                    # class specific threshold
                    mask = max_probs.ge(self.cls_threshold[targets_u]).float().to(self.args.device)
 
-                start_time = timeit.default_timer()
                 debug_ratio = debug_unlabel_info(targets_u, gts_u, mask)
                 for i in range(len(debug_list)):
                   debug_list[i].update(debug_ratio[i])
                 
-
                 Lu = (F.cross_entropy(logits_u_s, targets_u, weight=self.per_cls_weights, reduction='none') * mask).mean()
                 if self.args.use_scl:
                    loss = Lx + self.args.lambda_u * Lu + self.args.lambda_s * Ls
                 else:
                    loss = Lx + self.args.lambda_u * Lu
-                print('Forward Time: ', timeit.default_timer() - start_time)
                 # update model
                 self.optimizer.zero_grad()
-                start_time = timeit.default_timer()
                 loss.backward()
                 losses.update(loss.item())
                 losses_x.update(Lx.item())
@@ -279,9 +275,9 @@ class our_match(object):
                     losses_s.update(Ls.item())
 
                 self.optimizer.step()
-                print('Backward Time: ', timeit.default_timer() - start_time)
 
         print('Epoch [%3d/%3d] \t Losses: %.8f, Losses_x: %.8f Losses_u: %.8f'% (epoch, self.args.epoch, losses.avg, losses_x.avg, losses_u.avg))
+        print('True Training Time: ', timeit.default_timer() - start_time)
         # write into tensorboard
         self.writer.add_scalar('Loss', losses.avg, self.update_cnt)
         self.writer.add_scalar('Loss_x', losses_x.avg, self.update_cnt)
