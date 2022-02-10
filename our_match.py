@@ -220,6 +220,9 @@ class our_match(object):
                 inputs_x = self.aug(inputs_x, 'weak')
                 inputs_imb_x = self.aug(inputs_imb_x, 'weak')
                 inputs_u, inputs_u2 = self.aug(inputs_u, 'weak_strong')
+                print('Training one-batch Data Time: ', timeit.default_timer() - start_time)
+
+                start_time = timeit.default_timer()
 
                 logits_u_w = self.model(inputs_u)
                 logits_u_s = self.model(inputs_u2)
@@ -276,7 +279,8 @@ class our_match(object):
                     losses_s.update(Ls.item())
 
                 self.optimizer.step()
-                print('Training one-batch Time: ', timeit.default_timer() - start_time)
+                print('Training one-batch CAL Time: ', timeit.default_timer() - start_time)
+                
 
 
         print('Epoch [%3d/%3d] \t Losses: %.8f, Losses_x: %.8f Losses_u: %.8f'% (epoch, self.args.epoch, losses.avg, losses_x.avg, losses_u.avg))
