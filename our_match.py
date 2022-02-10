@@ -172,18 +172,18 @@ class our_match(object):
             else:
                 start_time = timeit.default_timer()
                 labeled_loader, unlabeled_loader, imb_labeled_loader = self.update_loader(trainloader, train_data, clean_targets, noisy_targets)
-                print('Prepare Data Loader Time: ', timeit.default_timer() - start_time)
+                #print('Prepare Data Loader Time: ', timeit.default_timer() - start_time)
                 if i == self.args.warmup and not self.args.use_pretrain:
                     self.model.init()
 
                 start_time = timeit.default_timer()
                 self.ourmatch_train(i, labeled_loader, unlabeled_loader, imb_labeled_loader)
-                print('Training Time: ', timeit.default_timer() - start_time)
+                #print('Training Time: ', timeit.default_timer() - start_time)
 
                 self.update_cnt += 1
                 start_time = timeit.default_timer()
                 acc, class_acc = self.eval(testloader, self.model, i)
-                print('Eval Time: ', timeit.default_timer() - start_time)
+                #print('Eval Time: ', timeit.default_timer() - start_time)
                 if acc > best_acc:
                     best_acc = acc
                     np.savez_compressed(self.log_dir + '/best_results.npz', test_acc=best_acc, test_class_acc=class_acc,
@@ -218,7 +218,7 @@ class our_match(object):
                 inputs_x = self.aug(inputs_x, 'weak')
                 inputs_imb_x = self.aug(inputs_imb_x, 'weak')
                 inputs_u, inputs_u2 = self.aug(inputs_u, 'weak_strong')
-                print('Training one-batch Data Time: ', timeit.default_timer() - start_time)
+                #print('Training one-batch Data Time: ', timeit.default_timer() - start_time)
 
                 start_time = timeit.default_timer()
 
@@ -277,7 +277,7 @@ class our_match(object):
                     losses_s.update(Ls.item())
 
                 self.optimizer.step()
-                print('Training one-batch CAL Time: ', timeit.default_timer() - start_time)
+                #print('Training one-batch CAL Time: ', timeit.default_timer() - start_time)
                 
 
 
