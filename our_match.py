@@ -53,12 +53,10 @@ class our_match(object):
             m = torch.bernoulli(prob)
             no, dim = input.shape
             # Randomly (and column-wise) shuffle data
-            x_bar = np.zeros([no, dim])
+            x_bar = torch.zeros_like(input).to(self.args.device)
             for i in range(dim):
                 idx = np.random.permutation(no)
-                x_bar[:, i] = input.data.cpu()[idx, i]
-            x_bar = torch.Tensor(x_bar).to(self.args.device)
-
+                x_bar[:, i] = input[idx, i]
             # Corrupt samples
             x_tilde = input * m + x_bar * (1 - m)
             ret.append(x_tilde)
