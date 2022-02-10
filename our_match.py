@@ -206,7 +206,7 @@ class our_match(object):
         debug_list = [AverageMeter() for _ in range(13)]
 
         for batch_idx, (b_l, b_u, b_imb_l) in enumerate(zip(labeled_loader, unlabeled_loader, imb_labeled_loader)):
-                start_time = timeit.default_timer()
+                
 
                 # unpack b_l, b_u, b_imb_l
                 inputs_x, targets_x = b_l
@@ -216,7 +216,7 @@ class our_match(object):
                 # shifit to gpu/cpu
                 inputs_x, inputs_u, inputs_imb_x = inputs_x.to(self.args.device), inputs_u.to(self.args.device), inputs_imb_x.to(self.args.device)
                 targets_x, targets_u, targets_imb_x = targets_x.to(self.args.device), targets_x.to(self.args.device), targets_imb_x.to(self.args.device)
-
+                start_time = timeit.default_timer()
                 inputs_x = self.aug(inputs_x, 'weak')
                 inputs_imb_x = self.aug(inputs_imb_x, 'weak')
                 inputs_u, inputs_u2 = self.aug(inputs_u, 'weak_strong')
