@@ -206,6 +206,7 @@ class our_match(object):
         debug_list = [AverageMeter() for _ in range(13)]
 
         for batch_idx, (b_l, b_u, b_imb_l) in enumerate(zip(labeled_loader, unlabeled_loader, imb_labeled_loader)):
+                start_time = timeit.default_timer()
                 # unpack b_l, b_u, b_imb_l
                 inputs_x, targets_x = b_l
                 inputs_u, gts_u = b_u
@@ -259,16 +260,19 @@ class our_match(object):
                 debug_ratio = debug_unlabel_info(targets_u, gts_u, mask)
                 for i in range(len(debug_list)):
                   debug_list[i].update(debug_ratio[i])
-                print('Debug Time: ', timeit.default_timer() - start_time)
+                
 
                 Lu = (F.cross_entropy(logits_u_s, targets_u, weight=self.per_cls_weights, reduction='none') * mask).mean()
                 if self.args.use_scl:
                    loss = Lx + self.args.lambda_u * Lu + self.args.lambda_s * Ls
                 else:
                    loss = Lx + self.args.lambda_u * Lu
+                print('Forward Time: ', timeit.default_timer() - start_time)
                 # update model
                 self.optimizer.zero_grad()
+                start_time = timeit.default_timer()
                 loss.backward()
+                print('Backward Time: ', timeit.default_timer() - start_time)
 
                 losses.update(loss.item())
                 losses_x.update(Lx.item())
