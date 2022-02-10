@@ -1,5 +1,6 @@
 import numpy as np
 from tqdm import tqdm
+import timeit
 import random
 import torch
 import torch.nn as nn
@@ -171,13 +172,20 @@ class our_match(object):
             if i < self.args.warmup:
                 self.warmup(i, trainloader)
             else:
+                start_time = timeit.default_timer()
                 labeled_loader, unlabeled_loader, imb_labeled_loader = self.update_loader(trainloader, train_data, clean_targets, noisy_targets)
+                print('Prepare Data Loader Time: ', timeit.default_timer() - start_time)
                 if i == self.args.warmup and not self.args.use_pretrain:
                     self.model.init()
+
+                start_time = timeit.default_timer()
                 self.ourmatch_train(i, labeled_loader, unlabeled_loader, imb_labeled_loader)
+                print('Training Time: ', timeit.default_timer() - start_time)
 
                 self.update_cnt += 1
+                start_time = timeit.default_timer()
                 acc, class_acc = self.eval(testloader, self.model, i)
+                print('Eval Time: ', timeit.default_timer() - start_time)
                 if acc > best_acc:
                     best_acc = acc
                     np.savez_compressed(self.log_dir + '/best_results.npz', test_acc=best_acc, test_class_acc=class_acc,
