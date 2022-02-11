@@ -37,32 +37,6 @@ class our_match(object):
            self.criterion = nn.CrossEntropyLoss().to(self.args.device)
         # SupConLoss
         self.criterion_con = SupConLoss(temperature=0.07)
-       
-
-    def aug(self, input, aug_type):
-        mask_ratio = []
-        if aug_type == 'weak':
-           mask_ratio.append(0.9)
-        else:
-           mask_ratio.append(0.9)  # weak augmentation
-           mask_ratio.append(0.8)  # strong augmentation
-        ret = []
-        for i in range(len(mask_ratio)):
-            ratio = mask_ratio[i]
-            prob = torch.zeros_like(input).fill_(ratio).to(self.args.device)
-            m = torch.bernoulli(prob)
-            no, dim = input.shape
-            # Randomly (and column-wise) shuffle data
-            x_bar = torch.zeros_like(input).to(self.args.device)
-            for i in range(dim):
-                idx = np.random.permutation(no)
-                x_bar[:, i] = input[idx, i]
-            # Corrupt samples
-            x_tilde = input * m + x_bar * (1 - m)
-            ret.append(x_tilde)
-
-        if aug_type == 'weak': return ret[0]
-        if aug_type == 'weak_strong': return ret[0], ret[1]
 
         # mix-up
     def mixup_criterion(self, criterion, pred, y_a, y_b, lam):
@@ -124,14 +98,18 @@ class our_match(object):
 
         noise_label = noisy_targets[labeled_indexs]
         clean_label = clean_targets[labeled_indexs]
+       
+        print('Labeled data clean ratio is %.2f' %clean_ratio)
 
-        cls_precision = debug_label_info(noise_label, clean_label)
-        att_cls = range(12)
-        for idx in range(len(att_cls)):
-          cls = att_cls[idx]
-          self.writer.add_scalar('Label_0_' + str(cls), cls_precision[cls], global_step=self.update_cnt)
-        self.writer.add_scalar('Label_clean_ratio', clean_ratio, global_step=self.update_cnt)
-        self.writer.add_scalar('Label_num', labeled_num, global_step=self.update_cnt)
+        if self.args.dataset_origin != 'real':
+            cls_precision = debug_label_info(noise_label, clean_label)
+            att_cls = range(self.args.num_class)
+            for idx in range(len(att_cls)):
+              cls = att_cls[idx]
+              self.writer.add_scalar('Label_0_' + str(cls), cls_precision[cls], global_step=self.update_cnt)
+            self.writer.add_scalar('Label_clean_ratio', clean_ratio, global_step=self.update_cnt)
+            
+            self.writer.add_scalar('Label_num', labeled_num, global_step=self.update_cnt)
 
         l_batch = self.args.batch_size
         u_batch = self.args.batch_size * 6
@@ -142,7 +120,7 @@ class our_match(object):
                                       num_workers=self.args.num_workers, pin_memory=True,
                                       drop_last=True)
         # imb_labeled_loader
-        imb_labeled_sampler =  ImbalancedDatasetSampler(labeled_dataset)
+        imb_labeled_sampler =  ImbalancedDatasetSampler(labeled_dataset, num_class=self.args.num_class)
         imb_labeled_loader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=False,
                              num_workers=self.args.num_workers, pin_memory=True, sampler=imb_labeled_sampler,
                              drop_last=True)
@@ -169,21 +147,23 @@ class our_match(object):
         for i in range(self.args.epoch):
             if i < self.args.warmup:
                 self.warmup(i, trainloader)
+                acc, class_acc = self.eval(testloader, self.model, i)
+
             else:
                 start_time = timeit.default_timer()
                 labeled_loader, unlabeled_loader, imb_labeled_loader = self.update_loader(trainloader, train_data, clean_targets, noisy_targets)
-                #print('Prepare Data Loader Time: ', timeit.default_timer() - start_time)
+                print('Prepare Data Loader Time: ', timeit.default_timer() - start_time)
                 if i == self.args.warmup and not self.args.use_pretrain:
                     self.model.init()
 
                 start_time = timeit.default_timer()
                 self.ourmatch_train(i, labeled_loader, unlabeled_loader, imb_labeled_loader)
-                #print('Training Time: ', timeit.default_timer() - start_time)
+                print('Training Time: ', timeit.default_timer() - start_time)
 
                 self.update_cnt += 1
                 start_time = timeit.default_timer()
                 acc, class_acc = self.eval(testloader, self.model, i)
-                #print('Eval Time: ', timeit.default_timer() - start_time)
+                print('Eval Time: ', timeit.default_timer() - start_time)
                 if acc > best_acc:
                     best_acc = acc
                     np.savez_compressed(self.log_dir + '/best_results.npz', test_acc=best_acc, test_class_acc=class_acc,
@@ -201,26 +181,23 @@ class our_match(object):
 
         # 0 -> 0, 1, ... 11
         # 11 -> 11
-        debug_list = [AverageMeter() for _ in range(13)]
+        if self.args.dataset_origin == 'real':
+           debug_list = [AverageMeter() for _ in range(self.args.num_class+1)]
+        else:
+           debug_list = [AverageMeter() for _ in range(self.args.num_class)]
 
         for batch_idx, (b_l, b_u, b_imb_l) in enumerate(zip(labeled_loader, unlabeled_loader, imb_labeled_loader)):
                 
-
                 # unpack b_l, b_u, b_imb_l
                 inputs_x, targets_x = b_l
-                inputs_u, gts_u = b_u
+                inputs_u, inputs_u2, gts_u = b_u
                 inputs_imb_x, targets_imb_x = b_imb_l
 
                 # shifit to gpu/cpu
-                inputs_x, inputs_u, inputs_imb_x = inputs_x.to(self.args.device), inputs_u.to(self.args.device), inputs_imb_x.to(self.args.device)
-                targets_x, targets_u, targets_imb_x = targets_x.to(self.args.device), targets_x.to(self.args.device), targets_imb_x.to(self.args.device)
-                start_time = timeit.default_timer()
-                inputs_x = self.aug(inputs_x, 'weak')
-                inputs_imb_x = self.aug(inputs_imb_x, 'weak')
-                inputs_u, inputs_u2 = self.aug(inputs_u, 'weak_strong')
-                #print('Training one-batch Data Time: ', timeit.default_timer() - start_time)
-
-                start_time = timeit.default_timer()
+                inputs_x, inputs_u, inputs_u2, inputs_imb_x = inputs_x.to(self.args.device), inputs_u.to(self.args.device), \
+                                                              inputs_u2.to(self.args.device), inputs_imb_x.to(self.args.device)
+                targets_x, targets_u, targets_imb_x = targets_x.to(self.args.device), \
+                                                      targets_x.to(self.args.device), targets_imb_x.to(self.args.device)
 
                 logits_u_w = self.model(inputs_u)
                 logits_u_s = self.model(inputs_u2)
@@ -258,9 +235,14 @@ class our_match(object):
                    # class specific threshold
                    mask = max_probs.ge(self.cls_threshold[targets_u]).float().to(self.args.device)
 
-                debug_ratio = debug_unlabel_info(targets_u, gts_u, mask)
-                for i in range(len(debug_list)):
-                  debug_list[i].update(debug_ratio[i])
+                if self.args.dataset_origin == 'real':
+                    debug_ratio = debug_real_unlabel_info(targets_u, gts_u, mask)
+                    for i in range(len(debug_list)):
+                      debug_list[i].update(debug_ratio[i])
+                else:
+                    debug_ratio = debug_unlabel_info(targets_u, gts_u, mask)
+                    for i in range(len(debug_list)):
+                      debug_list[i].update(debug_ratio[i])
                 
                 Lu = (F.cross_entropy(logits_u_s, targets_u, weight=self.per_cls_weights, reduction='none') * mask).mean()
                 if self.args.use_scl:
@@ -277,9 +259,6 @@ class our_match(object):
                     losses_s.update(Ls.item())
 
                 self.optimizer.step()
-                #print('Training one-batch CAL Time: ', timeit.default_timer() - start_time)
-                
-
 
         print('Epoch [%3d/%3d] \t Losses: %.8f, Losses_x: %.8f Losses_u: %.8f'% (epoch, self.args.epoch, losses.avg, losses_x.avg, losses_u.avg))
         # write into tensorboard
@@ -289,10 +268,16 @@ class our_match(object):
         if self.args.use_scl:
            self.writer.add_scalar('Loss_s', losses_s.avg, self.update_cnt)
 
-        for i in range(self.args.num_class):
-         # debug info
-         self.writer.add_scalar('UnLabel_class-0_' + str(i), debug_list[i].avg, self.update_cnt)
-        self.writer.add_scalar('UnLabel_class-11_clean', debug_list[12].avg, self.update_cnt)
+
+        if self.args.dataset_origin == 'real':
+            for i in range(self.args.num_class):
+                # debug info
+                self.writer.add_scalar('UnLabel_class-0_' + str(i), debug_list[i].avg, self.update_cnt)
+            self.writer.add_scalar('UnLabel_class-11_clean', debug_list[self.args.num_class].avg, self.update_cnt)
+        else:
+            for i in range(self.args.num_class):
+                # debug info
+                self.writer.add_scalar('UnLabel_class' + str(i) + '-clean_ratio', debug_list[i].avg, self.update_cnt)
 
 
     def warmup(self, epoch, trainloader):
@@ -350,8 +335,9 @@ class our_match(object):
         acc = 100 * float(correct) / float(total)
         print(class_acc)
         print('Epoch [%3d/%3d] Test Acc: %.2f%%' %(epoch, self.args.epoch, acc))
+        print(np.mean(class_acc[:5]), np.mean(class_acc[5:]))
         self.writer.add_scalar('Test Class-0 acc', class_acc[0], epoch)
-        self.writer.add_scalar('Test Class-11 acc', class_acc[11], epoch)
+        self.writer.add_scalar('Test Class-11 acc', class_acc[self.args.num_class-1], epoch)
         self.writer.add_scalar('Test Acc',  acc, epoch)
 
         return acc, class_acc

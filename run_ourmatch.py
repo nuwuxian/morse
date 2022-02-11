@@ -40,9 +40,11 @@ parser.add_argument('--seed', type=int, default=1)
 parser.add_argument('--num_workers', type=int, default=0, help='how many subprocesses to use for data loading')
 parser.add_argument('--gpu_index', type=int, default=0)
 
-# noise_setting
+# noise_setting | imbalanced setting
 parser.add_argument('--noise_rate', type = float, help = 'corruption rate, should be less than 1', default = 0.5)
 parser.add_argument('--noise_type', type = str,  default='none')
+parser.add_argument('--imb_type', type = str, default='none')
+parser.add_argument('--imb_ratio', type = float, default=0.1)
 
 parser.add_argument('--lambda-u', default=1.0, type=float,
                         help='coefficient of unlabeled loss')
@@ -57,7 +59,6 @@ parser.add_argument('--use_pretrain', default=True, type=bool)
 # divide data into clean / noise 
 parser.add_argument('--clean_method', default='confidence', type=str)
 parser.add_argument('--clean_theta', default=0.95, type=float)
-
 # imbalance method
 parser.add_argument('--imb_method', default='reweight', type=str)   # resample / mixup / reweight
 parser.add_argument('--reweight_start', default=50, type=int)
@@ -69,21 +70,22 @@ parser.add_argument('--unlabel_reweight', default=True, type=bool)
 parser.add_argument('--use_scl', default=False, type=bool)
 parser.add_argument('--lambda-s', default=0.1, type=float)
 
+# real-dataset | synthetic-dataset
+parser.add_argument('--dataset_origin', default='real', type=str) # real / synthetic
 
 args = parser.parse_args()
-root = './data'
+root = './data/real_world'
 dataset = args.dataset
 os.environ["CUDA_VISIBLE_DEVICES"] = str(args.cuda)
 
 # Hyper Parameters
 batch_size = args.batch_size
-learning_rate = args.lr
 input_dim = args.input_dim
 
 num_classes = args.num_class
 
 train_dataset, test_dataset, train_data, noisy_targets, \
-                clean_targets = get_dataset(root, args.dataset)
+                clean_targets = get_dataset(root, args.dataset, args.noise_type, args.imb_type, args.imb_ratio)
 
 train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True,
@@ -93,9 +95,9 @@ test_loader = torch.utils.data.DataLoader(
         test_dataset, batch_size=args.batch_size, shuffle=False,
         num_workers=args.num_workers, pin_memory=True, drop_last=False)
 
-
 out_dir = 'output/Imb-method-' + str(args.imb_method) + '_reweight-start-' + str(args.reweight_start) \
             + '_lr-' + str(args.lr) + '_weight-decay-' + str(args.weight_decay)
+
 timestamp = make_timestamp()
 exp_name = args.seed
 SAVE_DIR  = osp.join(out_dir, '{}-{}'.format(timestamp, exp_name))
@@ -110,7 +112,10 @@ else:
     args.device = torch.device('cpu')
     args.gpu_index = -1
 
-model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=nn.BatchNorm1d, use_scl=args.use_scl)
+if args.dataset_origin == 'real':
+   model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=nn.BatchNorm1d, use_scl=args.use_scl)
+else:
+   model = MLP_Net(input_dim, [1200, 1200, num_classes], batch_norm=nn.BatchNorm1d, use_scl=args.use_scl)
 
 if args.optimizer == 'adam':
     optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.weight_decay)

@@ -3,10 +3,32 @@ import torch
 import datetime
 import torch.nn.functional as F
 import torch.nn as nn
+
 def make_timestamp():
     ISO_TIMESTAMP = "%Y%m%d_%H%M%S"
     return datetime.datetime.now().strftime(ISO_TIMESTAMP)
 
+def cal_simialrity(data, gt, num_class):
+    # data: n * dim
+    feat = []
+    for i in range(num_class):
+        idx = np.where(gt == i)[0]
+        cluster_i = np.mean(data[idx], axis=0)
+        # F1-normalize
+        norm = np.linalg.norm(cluster_i)
+        cluster_i /= norm
+        feat.append(cluster_i)
+    feat = np.array(feat)
+    
+    return np.matmul(feat, feat.T)
+
+def aug(x, x_bar, ratio):
+    ret_x = x.copy()
+    sz = x.shape[0]
+    idx = np.random.choice(sz, int(sz * ratio))
+    ret_x[idx] = x_bar[idx]
+    return ret_x
+# Debug info, clean ratio
 def debug_label_info(pred, gt):
     idx = np.where(gt == 0)[0]
     cls_proportion = []
@@ -16,8 +38,26 @@ def debug_label_info(pred, gt):
         cls_proportion.append(proportion)
     return cls_proportion
 
+def debug_unlabel_info(pred, gt, mask, num_class):
+    pred = pred.data.cpu().numpy()
+    gt = gt.data.cpu().numpy()
+    mask = mask.data.cpu().numpy()
 
-def debug_unlabel_info(pred, gt, mask):
+    # select the true data
+    idx = np.where(mask == True)[0]
+    pred = pred[idx]
+    gt = gt[idx]
+
+    cls_proportion = []
+
+    for cls in range(num_class):
+        proportion = np.sum(pred[idx] == cls) * 1.0 / len(idx)
+        cls_proportion.append(proportion)
+
+    return cls_proportion
+
+
+def debug_real_unlabel_info(pred, gt, mask):
     pred = pred.data.cpu().numpy()
     gt = gt.data.cpu().numpy()
     mask = mask.data.cpu().numpy()

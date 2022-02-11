@@ -2,29 +2,62 @@ import numpy as np
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader
 from noise_utils import noisify
+from utils import aug, cal_simialrity
 import torch
 
-def get_dataset(root, dataset, num_classes=10):
+def get_dataset(root, dataset, noise_type, imb_type, imb_ratio, num_classes=10):
     # noise-data
     data = np.load(root + '/' + dataset + '.npz')
     train_data = data['X_train']
     train_labels = data['y_train']
     test_data = data['X_test']
     test_labels = data['y_test']
-    # clean-data
-    clean_data = np.load(root + '/' + dataset +'_true.npz')
-    clean_labels = clean_data['y_train']
-    
-    dataset_train = Train_Dataset(train_data, train_labels, num_classes=10, noise_type='none')
+
+    if imb_type != 'none':
+        cls_num_list = []
+        if imb_type == 'step':
+            for i in range(int(num_classes / 2)):
+                cls_num_list.append(1000)
+            for i in range(int(num_classes / 2)):
+                cls_num_list.append(int(1000 * imb_ratio))
+        else:
+            cls_num = num_classes
+            for cls_idx in range(cls_num):
+                num = 1000 * (imb_ratio**(cls_idx / (cls_num - 1.0)))
+                cls_num_list.append(int(num))
+        train_data, train_labels = get_imbalanced_data(num_classes, train_data, train_labels,  cls_num_list)
+    else:
+        # clean-label
+        clean_labels = np.load(root + '/' + dataset +'_true.npz')['y_train']
+
+    dataset_train = Train_Dataset(train_data, train_labels, num_classes=num_classes, noise_type=noise_type)
     dataset_test = Test_Dataset(test_data, test_labels)
 
-
+    if imb_type != 'none':
+        train_labels = np.array(dataset_train.train_noisy_labels)
+        clean_labels = dataset_train.gt
+    # simi_m = cal_simialrity(train_data, clean_labels, num_classes)
     return dataset_train, dataset_test, train_data, train_labels, clean_labels
 
 
+def get_imbalanced_data(num_classes, train_data, train_labels, img_num_per_cls):
+    ''' Gen a list of imbalanced training data '''
+    new_data = []
+    new_labels = []
+    new_clean_labels = []
+    for i in range(num_classes):
+        idx = np.where(train_labels == i)[0]
+        select_idx = idx[:img_num_per_cls[i]]
+        new_data.append(train_data[select_idx, ...])
+        new_labels.extend([i] * len(select_idx))
+
+    new_data = np.vstack(new_data)
+    new_labels = np.array(new_labels)
+    return new_data, new_labels
+
 class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
 
-    def __init__(self, dataset, indices=None, num_samples=None):
+    def __init__(self, dataset, indices=None, num_class=12, num_samples=None):
                 
         # if indices is not provided, 
         # all elements in the dataset will be considered
@@ -37,12 +70,12 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
             if num_samples is None else num_samples
             
         # distribution of classes in the dataset 
-        label_to_count = [0] * 12
+        label_to_count = [0] * num_class
         for idx in self.indices:
             label = self._get_label(dataset, idx)
             label_to_count[label] += 1
         # padding 1
-        for cls in range(12):
+        for cls in range(num_class):
             if label_to_count[cls] == 0:
                 label_to_count[cls] = 1
 
@@ -136,16 +169,25 @@ class Test_Dataset(Dataset):
     def getData(self):
         return self.data, self.targets
 
-
 class Semi_Labeled_Dataset(Dataset):
     def __init__(self, data, labels):
         self.data = np.array(data)
         self.targets = np.array(labels)
         self.length = len(self.targets)
+        self.dim = self.data.shape[1]
+
+        self.weak_ratio = 0.1
 
     def __getitem__(self, index):
         img, target = self.data[index], self.targets[index]
-        return img, target
+        # select img bar
+        idx = np.random.choice(self.length, self.dim)
+        idx = np.expand_dims(idx, axis=0)
+        img_bar = np.take_along_axis(self.data, idx, axis=0)
+        img_bar = img_bar.reshape(-1)
+
+        weak_img = aug(img, img_bar, self.weak_ratio)
+        return weak_img, target
 
     def __len__(self):
         return self.length
@@ -159,10 +201,23 @@ class Semi_Unlabeled_Dataset(Dataset):
         self.data = np.array(data)
         self.targets = np.array(labels)
         self.length = self.data.shape[0]
+        self.dim = self.data.shape[1]
+
+        self.aug_ratio = [0.1, 0.2]
 
     def __getitem__(self, index):
         img, target = self.data[index], self.targets[index]
-        return img, target
+
+        aug_img = []
+        for i in range(2):
+            idx = np.random.choice(self.length, self.dim)
+            idx = np.expand_dims(idx, axis=0)
+            img_bar = np.take_along_axis(self.data, idx, axis=0)
+            img_bar = img_bar.reshape(-1)
+
+            aug_img.append(aug(img, img_bar, self.aug_ratio[i]))
+
+        return aug_img[0], aug_img[1], target
 
     def __len__(self):
         return self.length
