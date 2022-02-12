@@ -81,7 +81,7 @@ class MLP_Net(nn.Module):
                 nn.ReLU(inplace=True),
                 nn.Linear(512, 256)
            )
-        #self.init()
+        self.init()
 
     def forward(self, x):
         return self.classifier(self.encoder(x))

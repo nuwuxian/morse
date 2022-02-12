@@ -28,7 +28,7 @@ parser.add_argument('--gamma', type=float, default=0.95, metavar='M',help='Learn
 parser.add_argument('--dataset', type = str, help = 'mnist, cifar10, cifar100, or imagenet_tiny', default = 'malware')
 
 parser.add_argument('--epoch', type=int, default=140)
-parser.add_argument('--warmup', type=int, default=10)
+parser.add_argument('--warmup', type=int, default=50)
 parser.add_argument('--optimizer', type = str, default='sgd')  # adam for malware-real
 parser.add_argument('--cuda', type = int, default=1)
 parser.add_argument('--num_class', type = int, default=10)
