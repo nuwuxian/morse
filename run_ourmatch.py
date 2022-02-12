@@ -1,8 +1,5 @@
 import os
-import torchvision.transforms as transforms
 import argparse
-import numpy as np
-import datetime
 from dataset import get_dataset
 from model import MLP_Net
 import torch.backends.cudnn as cudnn
@@ -16,7 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--lr', type=float, default=1e-3)
+parser.add_argument('--lr', type=float, default=1e-4) # 1e-3 for malware-real
 parser.add_argument('--batch_size', type=int, default=128)
 
 parser.add_argument('--momentum', type=float, default=0.9)
@@ -25,16 +22,16 @@ parser.add_argument('--weight_decay', type=float, default=2e-4)
 parser.add_argument('--nesterov', action='store_true', default=True,
                         help='use nesterov momentum')
 
-parser.add_argument('--input_dim', type=int, default=1024)
+parser.add_argument('--input_dim', type=int, default=2381)
 
 parser.add_argument('--gamma', type=float, default=0.95, metavar='M',help='Learning rate step gamma (default: 0.7)')
 parser.add_argument('--dataset', type = str, help = 'mnist, cifar10, cifar100, or imagenet_tiny', default = 'malware')
 
 parser.add_argument('--epoch', type=int, default=140)
-parser.add_argument('--warmup', type=int, default=10)
+parser.add_argument('--warmup', type=int, default=50)
 parser.add_argument('--optimizer', type = str, default='adam')
 parser.add_argument('--cuda', type = int, default=1)
-parser.add_argument('--num_class', type = int, default=12)
+parser.add_argument('--num_class', type = int, default=10)
 
 parser.add_argument('--seed', type=int, default=1)
 parser.add_argument('--num_workers', type=int, default=0, help='how many subprocesses to use for data loading')
@@ -42,8 +39,8 @@ parser.add_argument('--gpu_index', type=int, default=0)
 
 # noise_setting | imbalanced setting
 parser.add_argument('--noise_rate', type = float, help = 'corruption rate, should be less than 1', default = 0.5)
-parser.add_argument('--noise_type', type = str,  default='none')
-parser.add_argument('--imb_type', type = str, default='none')
+parser.add_argument('--noise_type', type = str,  default='none') # none for malware-real
+parser.add_argument('--imb_type', type = str, default='none') # none for malware-real
 parser.add_argument('--imb_ratio', type = float, default=0.1)
 
 parser.add_argument('--lambda-u', default=1.0, type=float,
@@ -57,7 +54,7 @@ parser.add_argument('--threshold', default=0.95, type=float,
 # whether use the pretrain model
 parser.add_argument('--use_pretrain', default=True, type=bool)
 # divide data into clean / noise 
-parser.add_argument('--clean_method', default='confidence', type=str)
+parser.add_argument('--clean_method', default='small_loss', type=str)
 parser.add_argument('--clean_theta', default=0.95, type=float)
 # imbalance method
 parser.add_argument('--imb_method', default='reweight', type=str)   # resample / mixup / reweight
@@ -71,10 +68,10 @@ parser.add_argument('--use_scl', default=False, type=bool)
 parser.add_argument('--lambda-s', default=0.1, type=float)
 
 # real-dataset | synthetic-dataset
-parser.add_argument('--dataset_origin', default='real', type=str) # real / synthetic
+parser.add_argument('--dataset_origin', default='synthetic', type=str) # real / synthetic
 
 args = parser.parse_args()
-root = './data/real_world'
+root = './data/synthetic'
 dataset = args.dataset
 os.environ["CUDA_VISIBLE_DEVICES"] = str(args.cuda)
 
@@ -123,8 +120,9 @@ else:
     optimizer = torch.optim.SGD(model.parameters(), args.lr, momentum=args.momentum,
                                 weight_decay=args.weight_decay, nesterov=args.nesterov)
 # Cosin Learning Rates
+# gamma 0.5 for real
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-            milestones=[30, 60], gamma=0.5, last_epoch=-1)
+            milestones=[10, 60], gamma=0.1, last_epoch=-1)
 
 dist = [0.14, 0.15, 0.15, 0.12, 0.15, 0.09, 0.01, 0.12, 0.03, 0.02, 0.01, 0.01]
 

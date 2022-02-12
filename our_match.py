@@ -9,7 +9,7 @@ import torch.distributions.categorical as cat
 from torch.utils.tensorboard import SummaryWriter
 import sys
 from sklearn.metrics import confusion_matrix
-from utils import AverageMeter, debug_label_info, debug_unlabel_info, predict_dataset_softmax
+from utils import AverageMeter, debug_label_info, debug_unlabel_info, debug_real_unlabel_info, predict_dataset_softmax
 from dataset import Train_Dataset, Semi_Labeled_Dataset, Semi_Unlabeled_Dataset,  ImbalancedDatasetSampler
 from torch.utils.data import DataLoader
 from losses import LDAMLoss, SupConLoss
@@ -101,7 +101,7 @@ class our_match(object):
        
         print('Labeled data clean ratio is %.2f' %clean_ratio)
 
-        if self.args.dataset_origin != 'real':
+        if self.args.dataset_origin == 'real':
             cls_precision = debug_label_info(noise_label, clean_label)
             att_cls = range(self.args.num_class)
             for idx in range(len(att_cls)):
@@ -240,7 +240,7 @@ class our_match(object):
                     for i in range(len(debug_list)):
                       debug_list[i].update(debug_ratio[i])
                 else:
-                    debug_ratio = debug_unlabel_info(targets_u, gts_u, mask)
+                    debug_ratio = debug_unlabel_info(targets_u, gts_u, mask, self.args.num_class)
                     for i in range(len(debug_list)):
                       debug_list[i].update(debug_ratio[i])
                 
@@ -335,9 +335,15 @@ class our_match(object):
         acc = 100 * float(correct) / float(total)
         print(class_acc)
         print('Epoch [%3d/%3d] Test Acc: %.2f%%' %(epoch, self.args.epoch, acc))
-        print(np.mean(class_acc[:5]), np.mean(class_acc[5:]))
-        self.writer.add_scalar('Test Class-0 acc', class_acc[0], epoch)
-        self.writer.add_scalar('Test Class-11 acc', class_acc[self.args.num_class-1], epoch)
+
+        if self.args.dataset_origin != 'real':
+           print('Large Class Accuracy is %.2f Small Class Accuracy is %.2f' %(np.mean(class_acc[:5]), np.mean(class_acc[5:])))
+           self.writer.add_scalar('Large Class acc', np.mean(class_acc[:5]), epoch)
+           self.writer.add_scalar('Small Class acc', np.mean(class_acc[5:]), epoch)
+        else:
+           self.writer.add_scalar('Test Class-0 acc', class_acc[0], epoch)
+           self.writer.add_scalar('Test Class-11 acc', class_acc[self.args.num_class-1], epoch)
+
         self.writer.add_scalar('Test Acc',  acc, epoch)
 
         return acc, class_acc

@@ -42,16 +42,15 @@ def debug_unlabel_info(pred, gt, mask, num_class):
     pred = pred.data.cpu().numpy()
     gt = gt.data.cpu().numpy()
     mask = mask.data.cpu().numpy()
-
     # select the true data
     idx = np.where(mask == True)[0]
     pred = pred[idx]
     gt = gt[idx]
 
     cls_proportion = []
-
     for cls in range(num_class):
-        proportion = np.sum(pred[idx] == cls) * 1.0 / len(idx)
+        cls_idx = np.where(gt == cls)[0]
+        proportion = np.sum(pred[cls_idx] == cls) * 1.0 / len(cls_idx)
         cls_proportion.append(proportion)
 
     return cls_proportion

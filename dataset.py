@@ -36,6 +36,7 @@ def get_dataset(root, dataset, noise_type, imb_type, imb_ratio, num_classes=10):
     if imb_type != 'none':
         train_labels = np.array(dataset_train.train_noisy_labels)
         clean_labels = dataset_train.gt
+    # synthetic dataset: class-6 | class-2, class-9 | class-2, class-4, class-5
     # simi_m = cal_simialrity(train_data, clean_labels, num_classes)
     return dataset_train, dataset_test, train_data, train_labels, clean_labels
 
@@ -44,7 +45,6 @@ def get_imbalanced_data(num_classes, train_data, train_labels, img_num_per_cls):
     ''' Gen a list of imbalanced training data '''
     new_data = []
     new_labels = []
-    new_clean_labels = []
     for i in range(num_classes):
         idx = np.where(train_labels == i)[0]
         select_idx = idx[:img_num_per_cls[i]]
