@@ -13,8 +13,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--lr', type=float, default=1e-4) # 1e-3 for malware-real
-parser.add_argument('--batch_size', type=int, default=128)
+parser.add_argument('--lr', type=float, default=2e-4) # 1e-3 for malware-real
+parser.add_argument('--batch_size', type=int, default=32)
 
 parser.add_argument('--momentum', type=float, default=0.9)
 parser.add_argument('--weight_decay', type=float, default=2e-4)
@@ -29,7 +29,7 @@ parser.add_argument('--dataset', type = str, help = 'mnist, cifar10, cifar100, o
 
 parser.add_argument('--epoch', type=int, default=140)
 parser.add_argument('--warmup', type=int, default=10)
-parser.add_argument('--optimizer', type = str, default='adam')
+parser.add_argument('--optimizer', type = str, default='sgd')  # adam for malware-real
 parser.add_argument('--cuda', type = int, default=1)
 parser.add_argument('--num_class', type = int, default=10)
 
@@ -110,9 +110,9 @@ else:
     args.gpu_index = -1
 
 if args.dataset_origin == 'real':
-   model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=nn.BatchNorm1d, use_scl=args.use_scl)
+   model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=None, use_scl=args.use_scl)
 else:
-   model = MLP_Net(input_dim, [1200, 1200, num_classes], batch_norm=nn.BatchNorm1d, use_scl=args.use_scl)
+   model = MLP_Net(input_dim, [1024, 1024, num_classes], batch_norm=None, use_scl=args.use_scl)
 
 if args.optimizer == 'adam':
     optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.weight_decay)
@@ -122,7 +122,7 @@ else:
 # Cosin Learning Rates
 # gamma 0.5 for real
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-            milestones=[10, 60], gamma=0.1, last_epoch=-1)
+            milestones=[30, 60, 90], gamma=0.9, last_epoch=-1)
 
 dist = [0.14, 0.15, 0.15, 0.12, 0.15, 0.09, 0.01, 0.12, 0.03, 0.02, 0.01, 0.01]
 

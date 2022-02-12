@@ -5,9 +5,7 @@ import random
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.distributions.categorical as cat
 from torch.utils.tensorboard import SummaryWriter
-import sys
 from sklearn.metrics import confusion_matrix
 from utils import AverageMeter, predict_dataset_softmax
 from utils import debug_label_info, debug_unlabel_info, debug_real_label_info, debug_real_unlabel_info

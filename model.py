@@ -1,9 +1,7 @@
 import torch.nn as nn
-import numpy as np
 from copy import deepcopy
 import torch
 import torch.nn.functional as F
-
 
 def initialize_weights(module):
     if isinstance(module, nn.Conv2d):
@@ -60,6 +58,7 @@ class MLP_Net(nn.Module):
 
         self.encoder = nn.Sequential()
         self.classifier = nn.Sequential()
+        self.use_scl = use_scl
 
         for i in range(len(hiddens)):
             bias = (batch_norm == None) or i == len(hiddens) - 1 
@@ -82,6 +81,7 @@ class MLP_Net(nn.Module):
                 nn.ReLU(inplace=True),
                 nn.Linear(512, 256)
            )
+        #self.init()
 
     def forward(self, x):
         return self.classifier(self.encoder(x))
@@ -97,7 +97,8 @@ class MLP_Net(nn.Module):
     def forward_classifier(self, x):
         return self.classifier(x)
 
-
     def init(self):
         self.encoder.apply(initialize_weights)
         self.classifier.apply(initialize_weights)
+        if self.use_scl:
+            self.head.apply(initialize_weights)
