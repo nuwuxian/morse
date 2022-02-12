@@ -37,7 +37,7 @@ def get_dataset(root, dataset, noise_type, imb_type, imb_ratio, num_classes=10):
         train_labels = np.array(dataset_train.train_noisy_labels)
         clean_labels = dataset_train.gt
     # synthetic dataset: class-6 | class-2, class-9 | class-2, class-4, class-5
-    # simi_m = cal_simialrity(train_data, clean_labels, num_classes)
+    simi_m = cal_simialrity(train_data, clean_labels, num_classes)
     return dataset_train, dataset_test, train_data, train_labels, clean_labels
 
 

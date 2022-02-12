@@ -28,8 +28,21 @@ def aug(x, x_bar, ratio):
     idx = np.random.choice(sz, int(sz * ratio))
     ret_x[idx] = x_bar[idx]
     return ret_x
+
 # Debug info, clean ratio
-def debug_label_info(pred, gt):
+def debug_label_info(pred, gt, num_class):
+    cls_proportion = []
+    for cls in range(num_class):
+        idx = np.where(gt == cls)[0]
+        if len(idx) == 0:
+            print('Label %d is Empty' %cls)
+            cls_proportion.append(0)
+        else:
+            cls_proportion.append(np.sum(pred[idx] == cls) * 1.0 / len(idx))
+
+    return cls_proportion
+
+def debug_real_label_info(pred, gt):
     idx = np.where(gt == 0)[0]
     cls_proportion = []
 
@@ -46,12 +59,16 @@ def debug_unlabel_info(pred, gt, mask, num_class):
     idx = np.where(mask == True)[0]
     pred = pred[idx]
     gt = gt[idx]
-
+    
     cls_proportion = []
     for cls in range(num_class):
         cls_idx = np.where(gt == cls)[0]
-        proportion = np.sum(pred[cls_idx] == cls) * 1.0 / len(cls_idx)
-        cls_proportion.append(proportion)
+        if len(cls_idx) == 0:
+            print('UnLabel %d is Empty' %cls)
+            cls_proportion.append(0)
+        else:
+            proportion = np.sum(pred[cls_idx] == cls) * 1.0 / len(cls_idx)
+            cls_proportion.append(proportion)
 
     return cls_proportion
 
