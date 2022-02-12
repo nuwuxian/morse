@@ -28,7 +28,7 @@ parser.add_argument('--gamma', type=float, default=0.95, metavar='M',help='Learn
 parser.add_argument('--dataset', type = str, help = 'mnist, cifar10, cifar100, or imagenet_tiny', default = 'malware')
 
 parser.add_argument('--epoch', type=int, default=140)
-parser.add_argument('--warmup', type=int, default=50)
+parser.add_argument('--warmup', type=int, default=10)
 parser.add_argument('--optimizer', type = str, default='adam')
 parser.add_argument('--cuda', type = int, default=1)
 parser.add_argument('--num_class', type = int, default=10)
@@ -39,8 +39,8 @@ parser.add_argument('--gpu_index', type=int, default=0)
 
 # noise_setting | imbalanced setting
 parser.add_argument('--noise_rate', type = float, help = 'corruption rate, should be less than 1', default = 0.5)
-parser.add_argument('--noise_type', type = str,  default='none') # none for malware-real
-parser.add_argument('--imb_type', type = str, default='none') # none for malware-real
+parser.add_argument('--noise_type', type = str,  default='imb_step_0.1') # none for malware-real
+parser.add_argument('--imb_type', type = str, default='step') # none for malware-real
 parser.add_argument('--imb_ratio', type = float, default=0.1)
 
 parser.add_argument('--lambda-u', default=1.0, type=float,

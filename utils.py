@@ -155,10 +155,12 @@ def predict_dataset_softmax(predict_loader, model, device, train_num, type):
         return torch.cat(softmax_outs, dim=0).to(device)
     else:
          loss_outs = torch.zeros(train_num).to(device)
+         crit = nn.CrossEntropyLoss(reduction='none')
          with torch.no_grad():
             for images1, label, idx in predict_loader:
                 images1 = images1.to(device)
+                label = label.to(device)
                 logits1 = model(images1)
-                loss = nn.CrossEntropyLoss(reduce=False)(logits1, label)
+                loss = crit(logits1, label)
                 loss_outs[idx] = loss
          return loss_outs
