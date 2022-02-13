@@ -65,9 +65,10 @@ class our_match(object):
                          else:
                             unlabeled_indexs.append(idx[indices[i].item()])
         else:
+            sz = noisy_targets.shape[0]
             for cls in range(self.args.num_class):
                 idx = np.where(noisy_targets == cls)[0]
-                select_num = int(600 * self.dist[cls])
+                select_num = int(sz * 0.15 * self.dist[cls])
                 cnt = 0
                 for i in range(len(idx)):
                     if noisy_targets[idx[i]] == clean_targets[idx[i]]:
