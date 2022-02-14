@@ -101,22 +101,16 @@ class our_match(object):
        
         print('Labeled data clean ratio is %.2f' %clean_ratio)
 
-        if self.args.dataset_origin == 'real':
-            cls_precision = debug_real_label_info(noise_label, clean_label)
-        else:
-            cls_precision = debug_label_info(noise_label, clean_label, self.args.num_class)
+        cls_precision = debug_label_info(noise_label, clean_label, self.args.num_class)
         
         att_cls = range(self.args.num_class)
         
         for idx in range(len(att_cls)):
-              cls = att_cls[idx]
-              if self.args.dataset_origin == 'real':
-                 self.writer.add_scalar('Label_0_' + str(cls), cls_precision[cls], global_step=self.update_cnt)
-              else:
-                 self.writer.add_scalar('Label_class' + str(cls) + '-clean_ratio', cls_precision[cls], global_step=self.update_cnt)
+            cls = att_cls[idx]
+            self.writer.add_scalar('Label_class' + str(cls) + '-clean_ratio', cls_precision[cls], global_step=self.update_cnt)
+        
         self.writer.add_scalar('Label_clean_ratio', clean_ratio, global_step=self.update_cnt)    
         self.writer.add_scalar('Label_num', labeled_num, global_step=self.update_cnt)
-
 
         l_batch = self.args.batch_size
         u_batch = self.args.batch_size * 6
@@ -244,14 +238,10 @@ class our_match(object):
                    # class specific threshold
                    mask = max_probs.ge(self.cls_threshold[targets_u]).float().to(self.args.device)
 
-                if self.args.dataset_origin == 'real':
-                    debug_ratio = debug_real_unlabel_info(targets_u, gts_u, mask)
-                    for i in range(len(debug_list)):
-                      debug_list[i].update(debug_ratio[i])
-                else:
-                    debug_ratio = debug_unlabel_info(targets_u, gts_u, mask, self.args.num_class)
-                    for i in range(len(debug_list)):
-                      debug_list[i].update(debug_ratio[i])
+               
+                debug_ratio = debug_unlabel_info(targets_u, gts_u, mask, self.args.num_class)
+                for i in range(len(debug_list)):
+                  debug_list[i].update(debug_ratio[i])
                 
                 Lu = (F.cross_entropy(logits_u_s, targets_u, weight=self.per_cls_weights, reduction='none') * mask).mean()
                 if self.args.use_scl:
@@ -276,17 +266,10 @@ class our_match(object):
         self.writer.add_scalar('Loss_u', losses_u.avg, self.update_cnt)
         if self.args.use_scl:
            self.writer.add_scalar('Loss_s', losses_s.avg, self.update_cnt)
-
-
-        if self.args.dataset_origin == 'real':
-            for i in range(self.args.num_class):
-                # debug info
-                self.writer.add_scalar('UnLabel_class-0_' + str(i), debug_list[i].avg, self.update_cnt)
-            self.writer.add_scalar('UnLabel_class-11_clean', debug_list[self.args.num_class].avg, self.update_cnt)
-        else:
-            for i in range(self.args.num_class):
-                # debug info
-                self.writer.add_scalar('UnLabel_class' + str(i) + '-clean_ratio', debug_list[i].avg, self.update_cnt)
+        
+        for i in range(self.args.num_class):
+            # debug info
+            self.writer.add_scalar('UnLabel_class' + str(i) + '-clean_ratio', debug_list[i].avg, self.update_cnt)
 
 
     def warmup(self, epoch, trainloader):

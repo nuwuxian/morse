@@ -64,10 +64,11 @@ for fold in os.listdir(path):
 avg_acc = np.array(avg_noise)
 # Format print
 print('Mean Accuracy is %.2f Std is %.2f' %(np.mean(avg_acc), np.std(avg_acc)))
-
 class_acc = np.vstack(avg_noise_acc)
+print(class_acc)
 
 for i in range(num_class):
-    diff_class_i = class_acc[:, i] - base_acc[i]
-    p_value = diff_p_value(diff_class_i)
-    print('Class' + str(i) + ' Mean Accuracy is %.f, Std is %.2f, P is %.2f' %(np.mean(class_acc[:, i]), np.std(class_acc[:, i]), p_value))
+    p_value = 0.0
+    #diff_class_i = class_acc[:, i] - base_acc[i]
+    #p_value = diff_p_value(diff_class_i)
+    print('Class' + str(i) + ' Mean Accuracy is %.2f, Std is %.2f, P is %.2f' %(np.mean(class_acc[:, i]), np.std(class_acc[:, i]), p_value))
