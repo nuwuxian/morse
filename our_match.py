@@ -277,7 +277,8 @@ class our_match(object):
             if i < self.args.num_class:
                self.writer.add_scalar('UnLabel_class' + str(i) + '-clean_ratio', debug_list[i].avg, self.update_cnt)
             else:
-               self.writer.add_scalar('UnLabel_class' + str(i) + '-prob', debug_list[i].avg, self.update_cnt)
+               cls = i % self.args.num_class
+               self.writer.add_scalar('UnLabel_class' + str(cls) + '-prob', debug_list[i].avg, self.update_cnt)
 
 
     def warmup(self, epoch, trainloader):
