@@ -46,8 +46,8 @@ parser.add_argument('--imb_ratio', type = float, default=0.1)
 parser.add_argument('--lambda-u', default=1.0, type=float,
                         help='coefficient of unlabeled loss')
 
-parser.add_argument('--T', default=0.5, type=float,
-                        help='pseudo label temperature')
+parser.add_argument('--T', default=1.0, type=float,
+                        help='pseudo label temperature') # higer temperature, probs are closer
 
 parser.add_argument('--threshold', default=0.95, type=float, # 0.95 for malware-real, 0.40 for malware-syn
                         help='pseudo label threshold')
@@ -63,6 +63,10 @@ parser.add_argument('--reweight_start', default=50, type=int)
 parser.add_argument('--alpha', default=10, type=int)
 parser.add_argument('--use_true_distribution', default=True, type=bool)
 parser.add_argument('--unlabel_reweight', default=True, type=bool)
+
+parser.add_argument('--dist_alignment', default=True, type=bool)
+parser.add_argument('--dist_alignment_eps', default=1e-6, type=float)
+parser.add_argument('--dist_alignment_batches', default=1, type=int)
 
 parser.add_argument('--use_scl', default=False, type=bool)
 parser.add_argument('--lambda-s', default=0.1, type=float)
@@ -88,7 +92,7 @@ num_classes = args.num_class
 
 train_dataset, test_dataset, train_data, \
 noisy_targets, clean_targets = get_dataset(root, args.dataset, args.noise_type, \
-                               args.imb_type, args.imb_ratio, args.num_classes)
+                               args.imb_type, args.imb_ratio, args.num_class)
 
 train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True,
@@ -137,7 +141,7 @@ else:
 # malware_real: [30, 60, 90], gamma = 0.5
 # malware_syn: [60, 80, 100], gamma = 0.5
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-            milestones=[30, 60, 90], gamma=0.5, last_epoch=-1)
+            milestones=[10, 60], gamma=0.3, last_epoch=-1)
 
 dist = [0.14, 0.15, 0.15, 0.12, 0.15, 0.09, 0.01, 0.12, 0.03, 0.02, 0.01, 0.01]
 

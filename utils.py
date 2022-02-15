@@ -22,6 +22,10 @@ def cal_simialrity(data, gt, num_class):
     
     return np.matmul(feat, feat.T)
 
+def get_labeled_dist(dataset):
+    counts = torch.unique(torch.tensor(dataset.targets), sorted=True, return_counts=True)[-1]
+    return counts.float() / counts.sum()
+
 def aug(x, x_bar, ratio):
     ret_x = x.copy()
     sz = x.shape[0]
@@ -164,9 +168,9 @@ def predict_dataset_softmax(predict_loader, model, device, train_num, type):
     if type == 'confidence':
         softmax_outs = []
         with torch.no_grad():
-            for images1, _, _ in predict_loader:
-                images1 = images1.to(device)
-                logits1 = model(images1)
+            for x, _, _ in predict_loader:
+                x = x.to(device)
+                logits1 = model(x)
                 outputs = F.softmax(logits1, dim=1)
                 softmax_outs.append(outputs)
         return torch.cat(softmax_outs, dim=0).to(device)
@@ -174,10 +178,10 @@ def predict_dataset_softmax(predict_loader, model, device, train_num, type):
          loss_outs = torch.zeros(train_num).to(device)
          crit = nn.CrossEntropyLoss(reduction='none')
          with torch.no_grad():
-            for images1, label, idx in predict_loader:
-                images1 = images1.to(device)
-                label = label.to(device)
-                logits1 = model(images1)
-                loss = crit(logits1, label)
+            for x, y, idx in predict_loader:
+                x = x.to(device)
+                y = y.to(device)
+                logits1 = model(x)
+                loss = crit(logits1, y)
                 loss_outs[idx] = loss
          return loss_outs

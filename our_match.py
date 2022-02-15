@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 from sklearn.metrics import confusion_matrix
-from utils import AverageMeter, predict_dataset_softmax
+from utils import AverageMeter, predict_dataset_softmax, get_labeled_dist
 from utils import debug_label_info, debug_unlabel_info, debug_real_label_info, debug_real_unlabel_info
 from dataset import Train_Dataset, Semi_Labeled_Dataset, Semi_Unlabeled_Dataset,  ImbalancedDatasetSampler
 from torch.utils.data import DataLoader
@@ -142,11 +142,17 @@ class our_match(object):
                self.writer.add_scalar('Class' + str(i) + '_weight', self.per_cls_weights[i], global_step=self.update_cnt)
         print('Labeled num is %d Unlabled num is %d' %(labeled_num, unlabeled_num))
 
-        return labeled_loader,  unlabeled_loader, imb_labeled_loader
+        return labeled_dataset, labeled_loader,  unlabeled_loader, imb_labeled_loader
 
     def run(self, train_data, clean_targets, noisy_targets, trainloader, testloader):
+
         self.train_num = clean_targets.shape[0]
         best_acc = 0.0
+
+        # dist_alignment or not
+        if self.args.dist_alignment:
+          self.model_dist = None
+
         for i in range(self.args.epoch):
             if i < self.args.warmup:
                 self.warmup(i, trainloader)
@@ -154,13 +160,13 @@ class our_match(object):
 
             else:
                 start_time = timeit.default_timer()
-                labeled_loader, unlabeled_loader, imb_labeled_loader = self.update_loader(trainloader, train_data, clean_targets, noisy_targets)
+                labeled_dataset, labeled_loader, unlabeled_loader, imb_labeled_loader = \
+                                 self.update_loader(trainloader, train_data, clean_targets, noisy_targets)
+
                 print('Prepare Data Loader Time: ', timeit.default_timer() - start_time)
-                if i == self.args.warmup and not self.args.use_pretrain:
-                    self.model.init()
 
                 start_time = timeit.default_timer()
-                self.ourmatch_train(i, labeled_loader, unlabeled_loader, imb_labeled_loader)
+                self.ourmatch_train(i, labeled_dataset, labeled_loader, unlabeled_loader, imb_labeled_loader)
                 print('Training Time: ', timeit.default_timer() - start_time)
 
                 self.update_cnt += 1
@@ -173,7 +179,7 @@ class our_match(object):
                                         best_epoch=i)
             self.scheduler.step()
 
-    def ourmatch_train(self, epoch, labeled_loader, unlabeled_loader, imb_labeled_loader):
+    def ourmatch_train(self, epoch, labeled_dataset, labeled_loader, unlabeled_loader, imb_labeled_loader):
 
         self.model.train()
 
@@ -181,68 +187,67 @@ class our_match(object):
         losses_x = AverageMeter()
         losses_u = AverageMeter()
         losses_s = AverageMeter()
-
-        # 0 -> 0, 1, ... 11
-        # 11 -> 11
-        if self.args.dataset_origin == 'real':
-           debug_list = [AverageMeter() for _ in range(self.args.num_class+1)]
-        else:
-           debug_list = [AverageMeter() for _ in range(self.args.num_class)]
+        # labeled distribution
+        labeled_dist = get_labeled_dist(labeled_dataset)
+        debug_list = [AverageMeter() for _ in range(self.args.num_class)]
 
         for batch_idx, (b_l, b_u, b_imb_l) in enumerate(zip(labeled_loader, unlabeled_loader, imb_labeled_loader)):
                 
                 # unpack b_l, b_u, b_imb_l
-                inputs_x, targets_x = b_l
-                inputs_u, inputs_u2, gts_u = b_u
-                inputs_imb_x, targets_imb_x = b_imb_l
+                xl, yl = b_l
+                xw, xs, gts_u = b_u
+                x_imb_l, y_imb_l = b_imb_l
+                # shift
+                xl, xw, xs, x_imb_l = xl.to(self.args.device), xw.to(self.args.device), \
+                                      xs.to(self.args.device), x_imb_l.to(self.args.device)
 
-                # shifit to gpu/cpu
-                inputs_x, inputs_u, inputs_u2, inputs_imb_x = inputs_x.to(self.args.device), inputs_u.to(self.args.device), \
-                                                              inputs_u2.to(self.args.device), inputs_imb_x.to(self.args.device)
-                targets_x, targets_imb_x = targets_x.to(self.args.device), targets_imb_x.to(self.args.device)
+                yl, y_imb_l = yl.to(self.args.device), y_imb_l.to(self.args.device)
 
-                logits_u_w = self.model(inputs_u)
-                logits_u_s = self.model(inputs_u2)
+                logits_xw = self.model(xw)
+                logits_xs = self.model(xs)
 
                 if self.args.imb_method == 'resample':
-                   logits_imb_x = self.model(inputs_imb_x)
-                   Lx = F.cross_entropy(logits_imb_x, targets_imb_x, reduction='mean')
+                   logits_imb_x = self.model(x_imb_l)
+                   Lx = F.cross_entropy(logits_imb_x, y_imb_l, reduction='mean')
 
                 elif self.args.imb_method == 'mixup':
                    lam = np.random.beta(self.args.alpha, self.args.alpha)
                    lam = max(lam, 1 - lam)
-                   idx = torch.randperm(inputs_x.size()[0])
+                   idx = torch.randperm(xl.size()[0])
                    # mixup in hidden-layers
-                   mix_x = self.model.forward_encoder(inputs_imb_x) * lam + \
-                            (1 - lam) * self.model.forward_encoder(inputs_x)
+                   mix_x = self.model.forward_encoder(x_imb_l) * lam + \
+                            (1 - lam) * self.model.forward_encoder(xl)
                    mix_logits = self.model.forward_classifier(mix_x)
-                   Lx = self.mixup_criterion(self.criterion, mix_logits, targets_imb_x, targets_x[idx], lam)
+                   Lx = self.mixup_criterion(self.criterion, mix_logits, y_imb_l, yl[idx], lam)
 
                 elif self.args.imb_method == 'reweight':
-                  logits_x = self.model(inputs_x)
-                  Lx = F.cross_entropy(logits_x, targets_x, weight=self.per_cls_weights, reduction='mean')
+                  logits_x = self.model(xl)
+                  Lx = F.cross_entropy(logits_x, yl, weight=self.per_cls_weights, reduction='mean')
 
                 # Use Suploss
                 if self.args.use_scl:
-                    feat = self.model.forward_feat(inputs_x)
+                    feat = self.model.forward_feat(xl)
                     feat = feat.unsqueeze(1)
-                    Ls = self.criterion_con(feat, targets_x)
+                    Ls = self.criterion_con(feat, yl)
 
-                pseudo_label = torch.softmax(logits_u_w.detach()/self.args.T, dim=-1)
-                max_probs, targets_u = torch.max(pseudo_label, dim=-1)
+                with torch.no_grad():
+                    probs = torch.softmax(logits_xw.detach() / self.args.T, -1)
+                    if self.args.dist_alignment:
+                      if self.model_dist == None:
+                        self.model_dist = torch.mean(probs, dim=0)
+                      else:
+                        self.model_dist = self.model_dist * 0.999 + torch.mean(probs, dim=0) * 0.001
+                      probs *= (labeled_dist + self.args.dist_alignment_eps) / (self.model_dist + self.args.dist_alignment_eps)
+                      probs /= probs.sum(-1, keepdim=True)
 
-                if self.args.use_pretrain:
-                   mask = max_probs.ge(self.args.threshold).float().to(self.args.device)
-                else:
-                   # class specific threshold
-                   mask = max_probs.ge(self.cls_threshold[targets_u]).float().to(self.args.device)
+                    yu = torch.argmax(probs, -1)
+                    mask = (torch.max(probs, -1)[0] >= self.threshold).to(dtype=torch.float32)
 
-               
-                debug_ratio = debug_unlabel_info(targets_u, gts_u, mask, self.args.num_class)
+                debug_ratio = debug_unlabel_info(yu, gts_u, mask, self.args.num_class)
                 for i in range(len(debug_list)):
                   debug_list[i].update(debug_ratio[i])
                 
-                Lu = (F.cross_entropy(logits_u_s, targets_u, weight=self.per_cls_weights, reduction='none') * mask).mean()
+                Lu = (F.cross_entropy(logits_xs, yu, weight=self.per_cls_weights, reduction='none') * mask).mean()
                 if self.args.use_scl:
                    loss = Lx + self.args.lambda_u * Lu + self.args.lambda_s * Ls
                 else:
