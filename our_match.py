@@ -189,7 +189,8 @@ class our_match(object):
         losses_s = AverageMeter()
         # labeled distribution
         labeled_dist = get_labeled_dist(labeled_dataset).to(self.args.device)
-        debug_list = [AverageMeter() for _ in range(self.args.num_class)]
+
+        debug_list = [AverageMeter() for _ in range(self.args.num_class * 2)]
 
         for batch_idx, (b_l, b_u, b_imb_l) in enumerate(zip(labeled_loader, unlabeled_loader, imb_labeled_loader)):
                 
@@ -271,9 +272,12 @@ class our_match(object):
         if self.args.use_scl:
            self.writer.add_scalar('Loss_s', losses_s.avg, self.update_cnt)
         
-        for i in range(self.args.num_class):
+        for i in range(2 * self.args.num_class):
             # debug info
-            self.writer.add_scalar('UnLabel_class' + str(i) + '-clean_ratio', debug_list[i].avg, self.update_cnt)
+            if i < self.args.num_class:
+               self.writer.add_scalar('UnLabel_class' + str(i) + '-clean_ratio', debug_list[i].avg, self.update_cnt)
+            else:
+               self.writer.add_scalar('UnLabel_class' + str(i) + '-prob', debug_list[i].avg, self.update_cnt)
 
 
     def warmup(self, epoch, trainloader):

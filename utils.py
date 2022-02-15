@@ -55,6 +55,7 @@ def debug_real_label_info(pred, gt):
         cls_proportion.append(proportion)
     return cls_proportion
 
+
 def debug_unlabel_info(pred, gt, mask, num_class):
     pred = pred.data.cpu().numpy()
     gt = gt.data.cpu().numpy()
@@ -64,17 +65,21 @@ def debug_unlabel_info(pred, gt, mask, num_class):
     pred = pred[idx]
     gt = gt[idx]
     
+    cls_clean = []
     cls_proportion = []
+
     for cls in range(num_class):
         cls_idx = np.where(pred == cls)[0]
+        cls_proportion.append(len(cls_idx) * 1.0 / len(idx))
+
         if len(cls_idx) == 0:
             print('UnLabel %d is Empty' %cls)
-            cls_proportion.append(0)
+            cls_clean.append(0)
         else:
             proportion = np.sum(gt[cls_idx] == cls) * 1.0 / len(cls_idx)
-            cls_proportion.append(proportion)
+            cls_clean.append(proportion)
 
-    return cls_proportion
+    return cls_clean + cls_proportion
 
 
 def debug_real_unlabel_info(pred, gt, mask):
