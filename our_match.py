@@ -188,7 +188,7 @@ class our_match(object):
         losses_u = AverageMeter()
         losses_s = AverageMeter()
         # labeled distribution
-        labeled_dist = get_labeled_dist(labeled_dataset)
+        labeled_dist = get_labeled_dist(labeled_dataset).to(self.args.device)
         debug_list = [AverageMeter() for _ in range(self.args.num_class)]
 
         for batch_idx, (b_l, b_u, b_imb_l) in enumerate(zip(labeled_loader, unlabeled_loader, imb_labeled_loader)):
