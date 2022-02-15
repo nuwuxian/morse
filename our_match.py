@@ -199,8 +199,7 @@ class our_match(object):
                 # shifit to gpu/cpu
                 inputs_x, inputs_u, inputs_u2, inputs_imb_x = inputs_x.to(self.args.device), inputs_u.to(self.args.device), \
                                                               inputs_u2.to(self.args.device), inputs_imb_x.to(self.args.device)
-                targets_x, targets_u, targets_imb_x = targets_x.to(self.args.device), \
-                                                      targets_x.to(self.args.device), targets_imb_x.to(self.args.device)
+                targets_x, targets_imb_x = targets_x.to(self.args.device), targets_imb_x.to(self.args.device)
 
                 logits_u_w = self.model(inputs_u)
                 logits_u_s = self.model(inputs_u2)

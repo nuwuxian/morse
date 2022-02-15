@@ -87,7 +87,8 @@ input_dim = args.input_dim
 num_classes = args.num_class
 
 train_dataset, test_dataset, train_data, \
-noisy_targets, clean_targets = get_dataset(root, args.dataset, args.noise_type, args.imb_type, args.imb_ratio)
+noisy_targets, clean_targets = get_dataset(root, args.dataset, args.noise_type, \
+                               args.imb_type, args.imb_ratio, args.num_classes)
 
 train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True,
