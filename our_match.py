@@ -349,12 +349,10 @@ class our_match(object):
            print('Large Class Accuracy is %.2f Small Class Accuracy is %.2f' %(np.mean(class_acc[:5]), np.mean(class_acc[5:])))
            self.writer.add_scalar('Large Class acc', np.mean(class_acc[:5]), epoch)
            self.writer.add_scalar('Small Class acc', np.mean(class_acc[5:]), epoch)
-           for i in range(self.args.num_class):
-               self.writer.add_scalar('Test Class-' + str(i) + ' acc', class_acc[i], epoch)
-        else:
-           self.writer.add_scalar('Test Class-0 acc', class_acc[0], epoch)
-           self.writer.add_scalar('Test Class-11 acc', class_acc[self.args.num_class-1], epoch)
 
+        for i in range(self.args.num_class):
+            self.writer.add_scalar('Test Class-' + str(i) + ' acc', class_acc[i], epoch)
+        
         self.writer.add_scalar('Test Acc',  acc, epoch)
 
         return acc, class_acc

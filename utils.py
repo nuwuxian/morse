@@ -34,8 +34,7 @@ def refine_pesudo_label(xw, probs, threshold, prototype, model):
 
     simi = torch.matmul(feat_xw, prototype.T)
     proto_pred = torch.argmax(simi, -1)
-
-
+    
     yu = torch.argmax(probs, -1)
     mask = (torch.max(probs, -1)[0] >= threshold).to(dtype=torch.float32)
     mask = torch.logical_and(mask, proto_pred == yu)

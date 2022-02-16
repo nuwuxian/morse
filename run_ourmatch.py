@@ -46,7 +46,7 @@ parser.add_argument('--imb_ratio', type = float, default=0.1)
 parser.add_argument('--lambda-u', default=1.0, type=float,
                         help='coefficient of unlabeled loss')
 
-parser.add_argument('--T', default=1.0, type=float,
+parser.add_argument('--T', default=0.5, type=float,
                         help='pseudo label temperature') # higer temperature, probs are closer
 
 parser.add_argument('--threshold', default=0.95, type=float, # 0.95 for malware-real, 0.40 for malware-syn
@@ -110,8 +110,9 @@ sub_fold = 'real/'
 if args.dataset_origin != 'real':
     sub_fold = 'syn/'
 
-out_dir = 'output/' + sub_fold + 'Imb-method-' + str(args.imb_method) + '_reweight-start-' + str(args.reweight_start) \
-            + '_lr-' + str(args.lr) + '_weight-decay-' + str(args.weight_decay)
+out_dir = 'output/' + sub_fold + 'reweight-start-' + str(args.reweight_start) \
+            + '_dist-alignment-' + str(args.dist_alignment) + '_use-true-distribution-' \
+            + str(args.use_true_distribution) + '_use-proto-' + str(args.use_proto)
 
 timestamp = make_timestamp()
 exp_name = args.seed

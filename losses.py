@@ -4,6 +4,31 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+
+
+def ce_loss(logits, targets, use_hard_labels=True, weight=None, reduction='none'):
+    """
+    wrapper for cross entropy loss in pytorch.
+    
+    Args
+        logits: logit values, shape=[Batch size, # of classes]
+        targets: integer or vector, shape=[Batch size] or [Batch size, # of classes]
+        use_hard_labels: If True, targets have [Batch size] shape with int values. If False, the target is vector (default True)
+    """
+    if use_hard_labels:
+        log_pred = F.log_softmax(logits, dim=-1)
+        return F.nll_loss(log_pred, targets, weight=weight, reduction=reduction)
+        # return F.cross_entropy(logits, targets, reduction=reduction) this is unstable
+    else:
+        assert logits.shape == targets.shape
+        log_pred = F.log_softmax(logits, dim=-1)
+        if weight == None:
+           nll_loss = torch.sum(-targets * log_pred, dim=1)
+        else:
+           nll_loss = torch.sum(-targets * log_pred * weight, dim=1)
+        return nll_loss
+
+
 class LDAMLoss(nn.Module):
     
     def __init__(self, cls_num_list, device, max_m=0.5, weight=None, s=30):
