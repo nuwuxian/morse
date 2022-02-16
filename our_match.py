@@ -270,7 +270,8 @@ class our_match(object):
                     losses_s.update(Ls.item())
 
                 self.optimizer.step()
-                self.prototype = update_proto(xl, yl, self.prototype, self.model)
+                if self.args.use_proto:
+                   self.prototype = update_proto(xl, yl, self.prototype, self.model)
 
         print('Epoch [%3d/%3d] \t Losses: %.8f, Losses_x: %.8f Losses_u: %.8f'% (epoch, self.args.epoch, losses.avg, losses_x.avg, losses_u.avg))
         # write into tensorboard

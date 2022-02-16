@@ -54,24 +54,24 @@ parser.add_argument('--threshold', default=0.95, type=float, # 0.95 for malware-
 # whether use the pretrain model
 parser.add_argument('--use_pretrain', default=True, type=bool)
 # divide data into clean / noise 
-parser.add_argument('--clean_method', default='small_loss', type=str)
+parser.add_argument('--clean_method', default='confidence', type=str)
 parser.add_argument('--clean_theta', default=0.95, type=float)
 # imbalance method
 parser.add_argument('--imb_method', default='reweight', type=str)   # resample / mixup / reweight
 parser.add_argument('--reweight_start', default=50, type=int)
 # mixup alpha
 parser.add_argument('--alpha', default=10, type=int)
-parser.add_argument('--use_true_distribution', default=True, type=bool)
+parser.add_argument('--use_true_distribution', default=False, type=bool)
 parser.add_argument('--unlabel_reweight', default=True, type=bool)
 
-parser.add_argument('--dist_alignment', default=True, type=bool)
+parser.add_argument('--dist_alignment', default=False, type=bool)
 parser.add_argument('--dist_alignment_eps', default=1e-6, type=float)
 parser.add_argument('--dist_alignment_batches', default=1, type=int)
 
 parser.add_argument('--use_scl', default=False, type=bool)
 parser.add_argument('--lambda-s', default=0.1, type=float)
 
-parser.add_argument('--use_proto', default=True, type=bool)
+parser.add_argument('--use_proto', default=False, type=bool)
 parser.add_argument('--use_hard_labels', default=False, type=bool)
 
 
@@ -146,7 +146,7 @@ else:
 # malware_real: [30, 60, 90], gamma = 0.5
 # malware_syn: [60, 80, 100], gamma = 0.5
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-            milestones=[10, 60], gamma=0.3, last_epoch=-1)
+            milestones=[30, 60, 90], gamma=0.5, last_epoch=-1)
 
 dist = [0.14, 0.15, 0.15, 0.12, 0.15, 0.09, 0.01, 0.12, 0.03, 0.02, 0.01, 0.01]
 
