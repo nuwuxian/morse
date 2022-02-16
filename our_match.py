@@ -121,28 +121,27 @@ class our_match(object):
         imb_labeled_loader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=False,
                              num_workers=self.args.num_workers, pin_memory=True, sampler=imb_labeled_sampler,
                              drop_last=True)
-
-        per_cls_weights = None
         # update criterion
         if self.args.imb_method == 'reweight' and self.args.reweight_start != -1:
            cls_num_list = imb_labeled_sampler.label_to_count
-           beta = 0.9999
+           if self.update_cnt >= self.args.reweight_start:
+              beta = 0.9999
+           else:
+              beta = 0.0
            effective_num = 1.0 - np.power(beta, cls_num_list)
            per_cls_weights = (1.0 - beta) / np.array(effective_num)
            per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
            per_cls_weights = torch.FloatTensor(per_cls_weights).to(self.args.device)
+           self.per_cls_weights = per_cls_weights
            for i in range(self.args.num_class):
-               self.writer.add_scalar('Class' + str(i) + '_weight',  per_cls_weights[i], global_step=self.update_cnt)
+               self.writer.add_scalar('Class' + str(i) + '_weight',  self.per_cls_weights[i], global_step=self.update_cnt)
         print('Labeled num is %d Unlabled num is %d' %(labeled_num, unlabeled_num))
 
-        return labeled_dataset, labeled_loader,  unlabeled_loader, imb_labeled_loader, per_cls_weights
-
+        return labeled_dataset, labeled_loader,  unlabeled_loader, imb_labeled_loader
 
     def run(self, train_data, clean_targets, noisy_targets, trainloader, testloader):
-
         self.train_num = clean_targets.shape[0]
         best_acc = 0.0
-
         # dist_alignment or not
         if self.args.dist_alignment:
           self.model_dist = None
@@ -152,16 +151,10 @@ class our_match(object):
                 self.warmup(i, trainloader)
                 acc, class_acc = self.eval(testloader, self.model, i)
             else:
-                # Labeled / UnLabeled DataLoader update only once
-                if i == self.args.warmup:
-                  start_time = timeit.default_timer()
-                  labeled_dataset, labeled_loader, unlabeled_loader, imb_labeled_loader, per_cls_weights = \
+                start_time = timeit.default_timer()
+                labeled_dataset, labeled_loader, unlabeled_loader, imb_labeled_loader = \
                                    self.update_loader(trainloader, train_data, clean_targets, noisy_targets)
-                  print('Prepare Data Loader Time: ', timeit.default_timer() - start_time)
-                
-                if i > self.args.reweight_start:
-                  self.per_cls_weights = per_cls_weights
-
+                print('Prepare Data Loader Time: ', timeit.default_timer() - start_time)
                 if self.args.use_proto:
                   self.prototype = init_prototype(labeled_loader, self.model, self.args.device, self.args.num_class)
 
@@ -193,7 +186,6 @@ class our_match(object):
         debug_list = [AverageMeter() for _ in range(self.args.num_class * 2)]
 
         for batch_idx, (b_l, b_u, b_imb_l) in enumerate(zip(labeled_loader, unlabeled_loader, imb_labeled_loader)):
-                
                 # unpack b_l, b_u, b_imb_l
                 xl, yl = b_l
                 xw, xs, gts_u = b_u

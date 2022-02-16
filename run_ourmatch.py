@@ -58,7 +58,7 @@ parser.add_argument('--clean_method', default='confidence', type=str)
 parser.add_argument('--clean_theta', default=0.95, type=float)
 # imbalance method
 parser.add_argument('--imb_method', default='reweight', type=str)   # resample / mixup / reweight
-parser.add_argument('--reweight_start', default=60, type=int)
+parser.add_argument('--reweight_start', default=50, type=int)
 # mixup alpha
 parser.add_argument('--alpha', default=10, type=int)
 parser.add_argument('--use_true_distribution', default=False, type=bool)
@@ -133,9 +133,9 @@ else:
     args.gpu_index = -1
 
 if args.dataset_origin == 'real':
-   model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=None, use_scl=args.use_scl)
+   model = MLP_Net(input_dim, [512, 512, num_classes], batch_norm=nn.BatchNorm1d, use_scl=args.use_scl)
 else:
-   model = MLP_Net(input_dim, [1024, 1024, num_classes], batch_norm=None, use_scl=args.use_scl)
+   model = MLP_Net(input_dim, [1024, 1024, num_classes], batch_norm=nn.BatchNorm1d, use_scl=args.use_scl)
 
 if args.optimizer == 'adam':
     optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.weight_decay)
@@ -146,7 +146,7 @@ else:
 # malware_real: [30, 60, 90], gamma = 0.5
 # malware_syn: [60, 80, 100], gamma = 0.5
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-            milestones=[30, 60, 90], gamma=0.5, last_epoch=-1)
+            milestones=[10, 60], gamma=0.3, last_epoch=-1)
 
 dist = [0.14, 0.15, 0.15, 0.12, 0.15, 0.09, 0.01, 0.12, 0.03, 0.02, 0.01, 0.01]
 
