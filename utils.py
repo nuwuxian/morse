@@ -22,6 +22,51 @@ def cal_simialrity(data, gt, num_class):
     
     return np.matmul(feat, feat.T)
 
+
+
+
+
+
+
+
+
+
+
+
+
+def refine_pesudo_label(xw, probs, threshold, prototype, model):
+    # xw: batch_sz * dim
+    # prototype: k * dim 
+
+    # cal the cos-similiarity between xw and prototype
+    # (batch_sz * dim) * (dim * k)
+    feat_xw = model.forward_encoder(xw)
+    feat_xw = F.normlize(feat_xw, dim=-1, p=2)
+
+    simi = torch.matmul(feat_xw, prototype.T)
+    proto_pred = torch.argmax(simi, -1)
+
+
+    yu = torch.argmax(probs, -1)
+    mask = (torch.max(probs, -1)[0] >= threshold).to(dtype=torch.float32)
+    mask = torch.logical_and(mask, proto_pred == yu)
+
+    return yu, mask
+
+
+def update_proto(x, y, prototype, model):
+    # prototype: k * dim
+    # x: batch_sz * dim
+    feat_x = model.forward_encoder(x)
+    feat_x = F.normalize(feat_x, dim=-1, p=2)
+    class_num = prototype.size(0)
+    for feat, label in zip(feat_x, y):
+        prototype[label] = prototype[label] * 0.999 + (1 - 0.999) * feat
+    prototype = F.normalize(prototype, dim=-1, p=2)
+
+    return prototype
+
+
 def get_labeled_dist(dataset):
     counts = torch.unique(torch.tensor(dataset.targets), sorted=True, return_counts=True)[-1]
     return counts.float() / counts.sum()

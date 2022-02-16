@@ -9,6 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from sklearn.metrics import confusion_matrix
 from utils import AverageMeter, predict_dataset_softmax, get_labeled_dist
 from utils import debug_label_info, debug_unlabel_info, debug_real_label_info, debug_real_unlabel_info
+from utils import refine_pesudo_label, update_proto
 from dataset import Train_Dataset, Semi_Labeled_Dataset, Semi_Unlabeled_Dataset,  ImbalancedDatasetSampler
 from torch.utils.data import DataLoader
 from losses import LDAMLoss, SupConLoss
@@ -157,12 +158,10 @@ class our_match(object):
             if i < self.args.warmup:
                 self.warmup(i, trainloader)
                 acc, class_acc = self.eval(testloader, self.model, i)
-
             else:
                 start_time = timeit.default_timer()
                 labeled_dataset, labeled_loader, unlabeled_loader, imb_labeled_loader = \
                                  self.update_loader(trainloader, train_data, clean_targets, noisy_targets)
-
                 print('Prepare Data Loader Time: ', timeit.default_timer() - start_time)
 
                 start_time = timeit.default_timer()
@@ -241,8 +240,11 @@ class our_match(object):
                       probs *= (labeled_dist + self.args.dist_alignment_eps) / (self.model_dist + self.args.dist_alignment_eps)
                       probs /= probs.sum(-1, keepdim=True)
 
-                    yu = torch.argmax(probs, -1)
-                    mask = (torch.max(probs, -1)[0] >= self.threshold).to(dtype=torch.float32)
+                    if not self.args.use_proto:
+                       yu = torch.argmax(probs, -1)
+                       mask = (torch.max(probs, -1)[0] >= self.threshold).to(dtype=torch.float32)
+                    else:
+                       yu, mask = refine_pesudo_label(xw, probs, self.threshold, self.prototype, self.model)
 
                 debug_ratio = debug_unlabel_info(yu, gts_u, mask, self.args.num_class)
                 for i in range(len(debug_list)):
@@ -263,6 +265,7 @@ class our_match(object):
                     losses_s.update(Ls.item())
 
                 self.optimizer.step()
+                self.prototype = update_proto(xl, yl, self.prototype, self.model)
 
         print('Epoch [%3d/%3d] \t Losses: %.8f, Losses_x: %.8f Losses_u: %.8f'% (epoch, self.args.epoch, losses.avg, losses_x.avg, losses_u.avg))
         # write into tensorboard
