@@ -58,7 +58,7 @@ parser.add_argument('--clean_method', default='confidence', type=str)
 parser.add_argument('--clean_theta', default=0.95, type=float)
 # imbalance method
 parser.add_argument('--imb_method', default='reweight', type=str)   # resample / mixup / reweight
-parser.add_argument('--reweight_start', default=50, type=int)
+parser.add_argument('--reweight_start', default=60, type=int)
 # mixup alpha
 parser.add_argument('--alpha', default=10, type=int)
 parser.add_argument('--use_true_distribution', default=False, type=bool)

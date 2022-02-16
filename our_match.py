@@ -35,6 +35,8 @@ class our_match(object):
 
         if self.args.imb_method == 'resample' or self.args.imb_method == 'mixup':
            self.criterion = nn.CrossEntropyLoss().to(self.args.device)
+
+        self.per_cls_weights = None
         # SupConLoss
         self.criterion_con = SupConLoss(temperature=0.07)
 
@@ -48,13 +50,6 @@ class our_match(object):
 
         if not self.args.use_true_distribution:
             if self.args.clean_method == 'confidence':
-                probs, preds = torch.max(outs.data, 1)
-                for i in range(0, len(noisy_targets)):
-                    if preds[i] == noisy_targets[i] and probs[i] > self.args.clean_theta:
-                        labeled_indexs.append(i)
-                    else:
-                        unlabeled_indexs.append(i)
-            elif self.args.clean_method == 'small_loss':
                  for cls in range(self.args.num_class):
                      idx = np.where(noisy_targets==cls)[0]
                      loss_cls = outs[idx]
@@ -85,7 +80,7 @@ class our_match(object):
 
     def update_loader(self, train_loader, train_data, clean_targets, noisy_targets):
         
-        soft_outs = predict_dataset_softmax(train_loader, self.model, self.args.device, self.train_num, self.args.clean_method)
+        soft_outs = predict_dataset_softmax(train_loader, self.model, self.args.device, self.train_num)
 
         labeled_indexs, unlabeled_indexs = self.splite_confident(soft_outs, clean_targets, noisy_targets)
         labeled_dataset = Semi_Labeled_Dataset(train_data[labeled_indexs], noisy_targets[labeled_indexs])
@@ -127,24 +122,20 @@ class our_match(object):
                              num_workers=self.args.num_workers, pin_memory=True, sampler=imb_labeled_sampler,
                              drop_last=True)
 
-        self.per_cls_weights = None
+        per_cls_weights = None
         # update criterion
         if self.args.imb_method == 'reweight' and self.args.reweight_start != -1:
            cls_num_list = imb_labeled_sampler.label_to_count
-           if self.update_cnt >= self.args.reweight_start:
-              beta = 0.9999
-           else:
-              beta = 0
+           beta = 0.9999
            effective_num = 1.0 - np.power(beta, cls_num_list)
            per_cls_weights = (1.0 - beta) / np.array(effective_num)
            per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
            per_cls_weights = torch.FloatTensor(per_cls_weights).to(self.args.device)
-           self.per_cls_weights = per_cls_weights
            for i in range(self.args.num_class):
-               self.writer.add_scalar('Class' + str(i) + '_weight', self.per_cls_weights[i], global_step=self.update_cnt)
+               self.writer.add_scalar('Class' + str(i) + '_weight',  per_cls_weights[i], global_step=self.update_cnt)
         print('Labeled num is %d Unlabled num is %d' %(labeled_num, unlabeled_num))
 
-        return labeled_dataset, labeled_loader,  unlabeled_loader, imb_labeled_loader
+        return labeled_dataset, labeled_loader,  unlabeled_loader, imb_labeled_loader, per_cls_weights
 
 
     def run(self, train_data, clean_targets, noisy_targets, trainloader, testloader):
@@ -161,10 +152,15 @@ class our_match(object):
                 self.warmup(i, trainloader)
                 acc, class_acc = self.eval(testloader, self.model, i)
             else:
-                start_time = timeit.default_timer()
-                labeled_dataset, labeled_loader, unlabeled_loader, imb_labeled_loader = \
-                                 self.update_loader(trainloader, train_data, clean_targets, noisy_targets)
-                print('Prepare Data Loader Time: ', timeit.default_timer() - start_time)
+                # Labeled / UnLabeled DataLoader update only once
+                if i == self.args.warmup:
+                  start_time = timeit.default_timer()
+                  labeled_dataset, labeled_loader, unlabeled_loader, imb_labeled_loader, per_cls_weights = \
+                                   self.update_loader(trainloader, train_data, clean_targets, noisy_targets)
+                  print('Prepare Data Loader Time: ', timeit.default_timer() - start_time)
+                
+                if i > self.args.reweight_start:
+                  self.per_cls_weights = per_cls_weights
 
                 if self.args.use_proto:
                   self.prototype = init_prototype(labeled_loader, self.model, self.args.device, self.args.num_class)

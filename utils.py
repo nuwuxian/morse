@@ -221,25 +221,15 @@ def init_prototype(labeled_loader, model, device, class_num):
 
     return prototype
 
-def predict_dataset_softmax(predict_loader, model, device, train_num, type):
+def predict_dataset_softmax(predict_loader, model, device, train_num):
     model.eval()
-    if type == 'confidence':
-        softmax_outs = []
-        with torch.no_grad():
-            for x, _, _ in predict_loader:
-                x = x.to(device)
-                logits1 = model(x)
-                outputs = F.softmax(logits1, dim=1)
-                softmax_outs.append(outputs)
-        return torch.cat(softmax_outs, dim=0).to(device)
-    else:
-         loss_outs = torch.zeros(train_num).to(device)
-         crit = nn.CrossEntropyLoss(reduction='none')
-         with torch.no_grad():
-            for x, y, idx in predict_loader:
-                x = x.to(device)
-                y = y.to(device)
-                logits1 = model(x)
-                loss = crit(logits1, y)
-                loss_outs[idx] = loss
-         return loss_outs
+    loss_outs = torch.zeros(train_num).to(device)
+    crit = nn.CrossEntropyLoss(reduction='none')
+    with torch.no_grad():
+        for x, y, idx in predict_loader:
+            x = x.to(device)
+            y = y.to(device)
+            logits1 = model(x)
+            loss = crit(logits1, y)
+            loss_outs[idx] = loss
+    return loss_outs
