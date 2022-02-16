@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from sklearn.metrics import confusion_matrix
 from utils import AverageMeter, predict_dataset_softmax, get_labeled_dist
 from utils import debug_label_info, debug_unlabel_info, debug_real_label_info, debug_real_unlabel_info
-from utils import refine_pesudo_label, update_proto
+from utils import refine_pesudo_label, update_proto, init_prototype
 from dataset import Train_Dataset, Semi_Labeled_Dataset, Semi_Unlabeled_Dataset,  ImbalancedDatasetSampler
 from torch.utils.data import DataLoader
 from losses import LDAMLoss, SupConLoss
@@ -126,6 +126,7 @@ class our_match(object):
         imb_labeled_loader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=False,
                              num_workers=self.args.num_workers, pin_memory=True, sampler=imb_labeled_sampler,
                              drop_last=True)
+
         self.per_cls_weights = None
         # update criterion
         if self.args.imb_method == 'reweight' and self.args.reweight_start != -1:
@@ -145,6 +146,7 @@ class our_match(object):
 
         return labeled_dataset, labeled_loader,  unlabeled_loader, imb_labeled_loader
 
+
     def run(self, train_data, clean_targets, noisy_targets, trainloader, testloader):
 
         self.train_num = clean_targets.shape[0]
@@ -163,6 +165,9 @@ class our_match(object):
                 labeled_dataset, labeled_loader, unlabeled_loader, imb_labeled_loader = \
                                  self.update_loader(trainloader, train_data, clean_targets, noisy_targets)
                 print('Prepare Data Loader Time: ', timeit.default_timer() - start_time)
+
+                if self.args.use_proto:
+                  self.prototype = init_prototype(labeled_loader, self.model, self.args.device, self.args.num_class)
 
                 start_time = timeit.default_timer()
                 self.ourmatch_train(i, labeled_dataset, labeled_loader, unlabeled_loader, imb_labeled_loader)

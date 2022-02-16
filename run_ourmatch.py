@@ -71,7 +71,7 @@ parser.add_argument('--dist_alignment_batches', default=1, type=int)
 parser.add_argument('--use_scl', default=False, type=bool)
 parser.add_argument('--lambda-s', default=0.1, type=float)
 
-parser.add_argument('--use_proto', default=False, type=bool)
+parser.add_argument('--use_proto', default=True, type=bool)
 parser.add_argument('--use_hard_labels', default=False, type=bool)
 
 

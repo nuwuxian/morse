@@ -23,17 +23,6 @@ def cal_simialrity(data, gt, num_class):
     return np.matmul(feat, feat.T)
 
 
-
-
-
-
-
-
-
-
-
-
-
 def refine_pesudo_label(xw, probs, threshold, prototype, model):
     # xw: batch_sz * dim
     # prototype: k * dim 
@@ -41,7 +30,7 @@ def refine_pesudo_label(xw, probs, threshold, prototype, model):
     # cal the cos-similiarity between xw and prototype
     # (batch_sz * dim) * (dim * k)
     feat_xw = model.forward_encoder(xw)
-    feat_xw = F.normlize(feat_xw, dim=-1, p=2)
+    feat_xw = F.normalize(feat_xw, dim=-1, p=2)
 
     simi = torch.matmul(feat_xw, prototype.T)
     proto_pred = torch.argmax(simi, -1)
@@ -58,7 +47,6 @@ def update_proto(x, y, prototype, model):
     # prototype: k * dim
     # x: batch_sz * dim
     feat_x = model.forward_encoder(x)
-    feat_x = F.normalize(feat_x, dim=-1, p=2)
     class_num = prototype.size(0)
     for feat, label in zip(feat_x, y):
         prototype[label] = prototype[label] * 0.999 + (1 - 0.999) * feat
@@ -197,7 +185,6 @@ class AverageMeter(object):
     """Computes and stores the average and current value
        Imported from https://github.com/pytorch/examples/blob/master/imagenet/main.py#L247-L262
     """
-
     def __init__(self):
         self.reset()
 
@@ -212,6 +199,28 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
+def init_prototype(labeled_loader, model, device, class_num):
+    ret_feat, ret_label = [], []
+    with torch.no_grad():
+        for x, y in labeled_loader:
+            x = x.to(device)
+            y = y.to(device)
+            feat = model.forward_encoder(x)
+            ret_feat.append(feat)
+            ret_label.append(y)
+    ret_feat = torch.cat(ret_feat, dim=0).to(device)
+    ret_label = torch.cat(ret_label, dim=0).to(device)
+    ret_label = ret_label.data.cpu().numpy()
+
+    prototype = []
+    for cls in range(class_num):
+        idx = np.where(ret_label == cls)[0]
+        prototype.append(torch.mean(ret_feat[idx, :], dim=0))
+    prototype = torch.vstack(prototype)
+    prototype = F.normalize(prototype, dim=-1, p=2)
+
+    return prototype
 
 def predict_dataset_softmax(predict_loader, model, device, train_num, type):
     model.eval()
