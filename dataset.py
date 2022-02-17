@@ -208,7 +208,6 @@ class Semi_Unlabeled_Dataset(Dataset):
 
     def __getitem__(self, index):
         img, target, gt = self.data[index], self.targets[index], self.gt[index]
-
         aug_img = []
         for i in range(2):
             idx = np.random.choice(self.length, self.dim)
