@@ -12,7 +12,7 @@ from utils import debug_label_info, debug_unlabel_info, debug_real_label_info, d
 from utils import refine_pesudo_label, update_proto, init_prototype
 from dataset import Train_Dataset, Semi_Labeled_Dataset, Semi_Unlabeled_Dataset,  ImbalancedDatasetSampler
 from torch.utils.data import DataLoader
-from losses import LDAMLoss, SupConLoss
+from losses import LDAMLoss, SupConLoss, ce_loss
 
 class our_match(object):
 
@@ -84,8 +84,8 @@ class our_match(object):
 
         labeled_indexs, unlabeled_indexs = self.splite_confident(soft_outs, clean_targets, noisy_targets)
         labeled_dataset = Semi_Labeled_Dataset(train_data[labeled_indexs], noisy_targets[labeled_indexs])
-        unlabeled_dataset = Semi_Unlabeled_Dataset(train_data[unlabeled_indexs], clean_targets[unlabeled_indexs])
-
+        unlabeled_dataset = Semi_Unlabeled_Dataset(train_data[unlabeled_indexs], noisy_targets[unlabeled_indexs], \
+                                                   clean_targets[unlabeled_indexs])
         labeled_num, unlabeled_num = len(labeled_indexs), len(unlabeled_indexs)
 
         # print confident set clean-ratio
@@ -188,13 +188,14 @@ class our_match(object):
         for batch_idx, (b_l, b_u, b_imb_l) in enumerate(zip(labeled_loader, unlabeled_loader, imb_labeled_loader)):
                 # unpack b_l, b_u, b_imb_l
                 xl, yl = b_l
-                xw, xs, gts_u = b_u
+                xw, xs, given_u, gt_u = b_u
                 x_imb_l, y_imb_l = b_imb_l
                 # shift
                 xl, xw, xs, x_imb_l = xl.to(self.args.device), xw.to(self.args.device), \
                                       xs.to(self.args.device), x_imb_l.to(self.args.device)
 
                 yl, y_imb_l = yl.to(self.args.device), y_imb_l.to(self.args.device)
+                given_u, gt_u = given_u.to(self.args.device), gt_u.to(self.args.device)
 
                 logits_xw = self.model(xw)
                 logits_xs = self.model(xs)
@@ -239,11 +240,18 @@ class our_match(object):
                     else:
                        yu, mask = refine_pesudo_label(xw, probs, self.threshold, self.prototype, self.model)
 
-                debug_ratio = debug_unlabel_info(yu, gts_u, mask, self.args.num_class)
+                debug_ratio = debug_unlabel_info(yu, gt_u, mask, self.args.num_class)
                 for i in range(len(debug_list)):
                   debug_list[i].update(debug_ratio[i])
-                
-                Lu = (F.cross_entropy(logits_xs, yu, weight=self.per_cls_weights, reduction='none') * mask).mean()
+
+                # use hardlabels or not
+                if self.args.use_hard_labels:
+                   Lu = (F.cross_entropy(logits_xs, yu, weight=self.per_cls_weights, reduction='none') * mask).mean()
+                else:
+                   one_hot = F.one_hot(given_u, num_classes=self.args.num_class).float()
+                   probs = probs * self.args.epsilon + (1 - self.args.epsilon) * one_hot
+                   Lu = (ce_loss(logits_xs, probs, use_hard_labels=False, weight=self.per_cls_weights, reduction='none') * mask).mean()
+
                 if self.args.use_scl:
                    loss = Lx + self.args.lambda_u * Lu + self.args.lambda_s * Ls
                 else:

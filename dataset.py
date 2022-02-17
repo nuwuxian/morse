@@ -197,16 +197,17 @@ class Semi_Labeled_Dataset(Dataset):
 
 
 class Semi_Unlabeled_Dataset(Dataset):
-    def __init__(self, data, labels):
+    def __init__(self, data, labels, gts):
         self.data = np.array(data)
         self.targets = np.array(labels)
+        self.gt = np.array(gts)
         self.length = self.data.shape[0]
         self.dim = self.data.shape[1]
 
         self.aug_ratio = [0.1, 0.2]
 
     def __getitem__(self, index):
-        img, target = self.data[index], self.targets[index]
+        img, target, gt = self.data[index], self.targets[index], self.gt[index]
 
         aug_img = []
         for i in range(2):
@@ -217,7 +218,7 @@ class Semi_Unlabeled_Dataset(Dataset):
 
             aug_img.append(aug(img, img_bar, self.aug_ratio[i]))
 
-        return aug_img[0], aug_img[1], target
+        return aug_img[0], aug_img[1], target, gt
 
     def __len__(self):
         return self.length

@@ -73,7 +73,7 @@ parser.add_argument('--lambda-s', default=0.1, type=float)
 
 parser.add_argument('--use_proto', default=False, type=bool)
 parser.add_argument('--use_hard_labels', default=False, type=bool)
-
+parser.add_argument('--epsilon', default=0.7, type=float)
 
 # real-dataset | synthetic-dataset
 parser.add_argument('--dataset_origin', default='real', type=str) # real / synthetic
@@ -146,7 +146,7 @@ else:
 # malware_real: [30, 60, 90], gamma = 0.5
 # malware_syn: [60, 80, 100], gamma = 0.5
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-            milestones=[10, 60], gamma=0.3, last_epoch=-1)
+            milestones=[10, 60, 90], gamma=0.3, last_epoch=-1)
 
 dist = [0.14, 0.15, 0.15, 0.12, 0.15, 0.09, 0.01, 0.12, 0.03, 0.02, 0.01, 0.01]
 
