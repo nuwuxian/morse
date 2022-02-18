@@ -5,7 +5,6 @@ import torch.nn.functional as F
 import numpy as np
 
 
-
 def ce_loss(logits, targets, use_hard_labels=True, weight=None, reduction='none'):
     """
     wrapper for cross entropy loss in pytorch.
@@ -27,6 +26,12 @@ def ce_loss(logits, targets, use_hard_labels=True, weight=None, reduction='none'
         else:
            nll_loss = torch.sum(-targets * log_pred * weight, dim=1)
         return nll_loss
+
+
+class NegEntropy(object):
+    def __call__(self,outputs):
+        probs = torch.softmax(outputs, dim=1)
+        return torch.mean(torch.sum(probs.log()*probs, dim=1))
 
 
 class LDAMLoss(nn.Module):

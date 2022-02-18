@@ -28,7 +28,7 @@ parser.add_argument('--gamma', type=float, default=0.95, metavar='M',help='Learn
 parser.add_argument('--dataset', type = str, help = 'mnist, cifar10, cifar100, or imagenet_tiny', default = 'malware')
 
 parser.add_argument('--epoch', type=int, default=120) # 120 for malware-real, 150 for malware-syn
-parser.add_argument('--warmup', type=int, default=5) # 10 for malware-real, 30 for malware-syn
+parser.add_argument('--warmup', type=int, default=10) # 10 for malware-real, 30 for malware-syn
 parser.add_argument('--optimizer', type = str, default='adam')  # adam for malware-real, sgd for malware-syn
 parser.add_argument('--cuda', type = int, default=1)
 parser.add_argument('--num_class', type = int, default=12) # 10 for malware-real, 12 for malware-syn
@@ -61,10 +61,10 @@ parser.add_argument('--imb_method', default='reweight', type=str)   # resample /
 parser.add_argument('--reweight_start', default=50, type=int)
 # mixup alpha
 parser.add_argument('--alpha', default=10, type=int)
-parser.add_argument('--use_true_distribution', default=True, type=bool)
+parser.add_argument('--use_true_distribution', default=False, type=bool)
 parser.add_argument('--unlabel_reweight', default=True, type=bool)
 
-parser.add_argument('--dist_alignment', default=True, type=bool)
+parser.add_argument('--dist_alignment', default=False, type=bool)
 parser.add_argument('--dist_alignment_eps', default=1e-6, type=float)
 parser.add_argument('--dist_alignment_batches', default=32, type=int)
 
@@ -72,6 +72,7 @@ parser.add_argument('--use_scl', default=False, type=bool)
 parser.add_argument('--lambda-s', default=0.1, type=float)
 
 parser.add_argument('--use_proto', default=False, type=bool)
+parser.add_argument('--use_penalty', default=True, type=bool)
 parser.add_argument('--use_hard_labels', default=True, type=bool)
 parser.add_argument('--epsilon', default=0.7, type=float)
 

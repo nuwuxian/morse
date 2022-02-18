@@ -12,7 +12,7 @@ from utils import debug_label_info, debug_unlabel_info, debug_real_label_info, d
 from utils import refine_pesudo_label, update_proto, init_prototype
 from dataset import Train_Dataset, Semi_Labeled_Dataset, Semi_Unlabeled_Dataset,  ImbalancedDatasetSampler
 from torch.utils.data import DataLoader
-from losses import LDAMLoss, SupConLoss, ce_loss
+from losses import LDAMLoss, SupConLoss, ce_loss, NegEntropy
 
 class our_match(object):
 
@@ -39,6 +39,7 @@ class our_match(object):
         self.per_cls_weights = None
         # SupConLoss
         self.criterion_con = SupConLoss(temperature=0.07)
+        self.conf_penalty = NegEntropy()
 
         # mix-up
     def mixup_criterion(self, criterion, pred, y_a, y_b, lam):
@@ -299,6 +300,8 @@ class our_match(object):
             
             self.optimizer.zero_grad()
             loss = nn.CrossEntropyLoss()(logits, y)
+            if self.args.use_penalty:
+               loss += self.conf_penalty(logits)
             loss.backward()
             self.optimizer.step()
             losses.update(loss.item(), len(logits))
