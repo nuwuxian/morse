@@ -61,18 +61,18 @@ parser.add_argument('--imb_method', default='reweight', type=str)   # resample /
 parser.add_argument('--reweight_start', default=50, type=int)
 # mixup alpha
 parser.add_argument('--alpha', default=10, type=int)
-parser.add_argument('--use_true_distribution', default=False, type=bool)
+parser.add_argument('--use_true_distribution', default=True, type=bool)
 parser.add_argument('--unlabel_reweight', default=True, type=bool)
 
-parser.add_argument('--dist_alignment', default=False, type=bool)
+parser.add_argument('--dist_alignment', default=True, type=bool)
 parser.add_argument('--dist_alignment_eps', default=1e-6, type=float)
-parser.add_argument('--dist_alignment_batches', default=1, type=int)
+parser.add_argument('--dist_alignment_batches', default=32, type=int)
 
 parser.add_argument('--use_scl', default=False, type=bool)
 parser.add_argument('--lambda-s', default=0.1, type=float)
 
 parser.add_argument('--use_proto', default=False, type=bool)
-parser.add_argument('--use_hard_labels', default=False, type=bool)
+parser.add_argument('--use_hard_labels', default=True, type=bool)
 parser.add_argument('--epsilon', default=0.7, type=float)
 
 # real-dataset | synthetic-dataset

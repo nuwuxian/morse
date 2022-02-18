@@ -144,7 +144,9 @@ class our_match(object):
         best_acc = 0.0
         # dist_alignment or not
         if self.args.dist_alignment:
-          self.model_dist = None
+            self.prev_labels = torch.full(
+                [self.args.dist_alignment_batches, self.args.num_class], 1 / self.args.num_class, device=self.args.device)
+            self.prev_labels_idx = 0
 
         for i in range(self.args.epoch):
             if i < self.args.warmup:
@@ -227,12 +229,11 @@ class our_match(object):
                 with torch.no_grad():
                     probs = torch.softmax(logits_xw.detach() / self.args.T, -1)
                     if self.args.dist_alignment:
-                      if self.model_dist == None:
-                        self.model_dist = torch.mean(probs, dim=0)
-                      else:
-                        self.model_dist = self.model_dist * 0.999 + torch.mean(probs, dim=0) * 0.001
-                      probs *= (labeled_dist + self.args.dist_alignment_eps) / (self.model_dist + self.args.dist_alignment_eps)
-                      probs /= probs.sum(-1, keepdim=True)
+                        model_dist = self.prev_labels.mean(0)
+                        self.prev_labels[self.prev_labels_idx] = probs.mean(0)
+                        self.prev_labels_idx = (self.prev_labels_idx + 1) % self.args.dist_alignment_batches
+                        probs *= (labeled_dist + self.args.dist_alignment_eps) / (model_dist + self.args.dist_alignment_eps)
+                        probs /= probs.sum(-1, keepdim=True)
 
                     if not self.args.use_proto:
                        yu = torch.argmax(probs, -1)
