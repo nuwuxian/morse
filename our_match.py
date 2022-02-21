@@ -1,7 +1,6 @@
 import numpy as np
-from tqdm import tqdm
 import timeit
-import random
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -9,10 +8,11 @@ from torch.utils.tensorboard import SummaryWriter
 from sklearn.metrics import confusion_matrix
 from utils import AverageMeter, predict_dataset_softmax, get_labeled_dist
 from utils import debug_label_info, debug_unlabel_info, debug_real_label_info, debug_real_unlabel_info
-from utils import refine_pesudo_label, update_proto, init_prototype
+from utils import refine_pesudo_label, update_proto, init_prototype, dynamic_threshold
 from dataset import Train_Dataset, Semi_Labeled_Dataset, Semi_Unlabeled_Dataset,  ImbalancedDatasetSampler
 from torch.utils.data import DataLoader
 from losses import LDAMLoss, SupConLoss, ce_loss, NegEntropy
+
 
 class our_match(object):
 
@@ -23,7 +23,7 @@ class our_match(object):
         self.optimizer = kwargs['optimizer']
         self.scheduler = kwargs['scheduler']
 
-        self.threshold = self.args.threshold
+        self.init_threshold = self.args.threshold
         self.log_dir = kwargs['logdir']
         # tensorboard writer
         self.writer = SummaryWriter(log_dir=self.log_dir)
@@ -40,6 +40,7 @@ class our_match(object):
         # SupConLoss
         self.criterion_con = SupConLoss(temperature=0.07)
         self.conf_penalty = NegEntropy()
+        self.threshold = None
 
         # mix-up
     def mixup_criterion(self, criterion, pred, y_a, y_b, lam):
@@ -80,9 +81,17 @@ class our_match(object):
         return labeled_indexs, unlabeled_indexs
 
     def update_loader(self, train_loader, train_data, clean_targets, noisy_targets):
-        
         soft_outs = predict_dataset_softmax(train_loader, self.model, self.args.device, self.train_num)
-
+        # initialize the threshold
+        if self.threshold == None:
+          if self.args.use_dynamic_threshold:
+             rho = torch.mean(soft_outs).item()
+             c = 1.0001
+             gamma = 1.27
+          else:
+             rho = -math.log(self.init_threshold)
+             c = gamma = 1.0
+          self.threshold = dynamic_threshold(c, rho, gamma)
         labeled_indexs, unlabeled_indexs = self.splite_confident(soft_outs, clean_targets, noisy_targets)
         labeled_dataset = Semi_Labeled_Dataset(train_data[labeled_indexs], noisy_targets[labeled_indexs])
         unlabeled_dataset = Semi_Unlabeled_Dataset(train_data[unlabeled_indexs], noisy_targets[unlabeled_indexs], \
@@ -153,7 +162,7 @@ class our_match(object):
             if i < self.args.warmup:
                 self.warmup(i, trainloader)
                 acc, class_acc = self.eval(testloader, self.model, i)
-            else:
+            else:              
                 start_time = timeit.default_timer()
                 labeled_dataset, labeled_loader, unlabeled_loader, imb_labeled_loader = \
                                    self.update_loader(trainloader, train_data, clean_targets, noisy_targets)
@@ -236,9 +245,10 @@ class our_match(object):
                         probs *= (labeled_dist + self.args.dist_alignment_eps) / (model_dist + self.args.dist_alignment_eps)
                         probs /= probs.sum(-1, keepdim=True)
 
+                    self.writer.add_scalar('Dynamic Threshold', math.exp(-self.threshold.rho_t), self.threshold.cnt)
                     if not self.args.use_proto:
                        yu = torch.argmax(probs, -1)
-                       mask = (torch.max(probs, -1)[0] >= self.threshold).to(dtype=torch.float32)
+                       mask = (-1.0 * torch.log(torch.max(probs, -1)[0]) <= self.threshold.rho_t).to(dtype=torch.float32)
                     else:
                        yu, mask = refine_pesudo_label(xw, probs, self.threshold, self.prototype, self.model)
 
@@ -268,6 +278,7 @@ class our_match(object):
                     losses_s.update(Ls.item())
 
                 self.optimizer.step()
+                self.threshold.update()
                 if self.args.use_proto:
                    self.prototype = update_proto(xl, yl, self.prototype, self.model)
 
@@ -309,6 +320,7 @@ class our_match(object):
             batch_idx += 1
 
         print('Epoch [%3d/%3d] Loss: %.2f' % (epoch, self.args.epoch, losses.avg))
+
 
     def eval(self, testloader, eval_model, epoch):
         eval_model.eval()  # Change model to 'eval' mode.

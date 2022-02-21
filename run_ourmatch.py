@@ -31,7 +31,7 @@ parser.add_argument('--epoch', type=int, default=120) # 120 for malware-real, 15
 parser.add_argument('--warmup', type=int, default=10) # 10 for malware-real, 30 for malware-syn
 parser.add_argument('--optimizer', type = str, default='adam')  # adam for malware-real, sgd for malware-syn
 parser.add_argument('--cuda', type = int, default=1)
-parser.add_argument('--num_class', type = int, default=12) # 10 for malware-real, 12 for malware-syn
+parser.add_argument('--num_class', type = int, default=12) # 12 for malware-real, 10 for malware-syn
 
 parser.add_argument('--seed', type=int, default=1)
 parser.add_argument('--num_workers', type=int, default=0, help='how many subprocesses to use for data loading')
@@ -58,7 +58,7 @@ parser.add_argument('--clean_method', default='confidence', type=str)
 parser.add_argument('--clean_theta', default=0.95, type=float)
 # imbalance method
 parser.add_argument('--imb_method', default='reweight', type=str)   # resample / mixup / reweight
-parser.add_argument('--reweight_start', default=50, type=int)
+parser.add_argument('--reweight_start', default=-1.0, type=int)
 # mixup alpha
 parser.add_argument('--alpha', default=10, type=int)
 parser.add_argument('--use_true_distribution', default=False, type=bool)
@@ -74,6 +74,7 @@ parser.add_argument('--lambda-s', default=0.1, type=float)
 parser.add_argument('--use_proto', default=False, type=bool)
 parser.add_argument('--use_penalty', default=True, type=bool)
 parser.add_argument('--use_hard_labels', default=True, type=bool)
+parser.add_argument('--use_dynamic_threshold', default=False, type=bool)
 parser.add_argument('--epsilon', default=0.7, type=float)
 
 # real-dataset | synthetic-dataset
@@ -147,7 +148,7 @@ else:
 # malware_real: [30, 60, 90], gamma = 0.5
 # malware_syn: [60, 80, 100], gamma = 0.5
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-            milestones=[10, 60, 90], gamma=0.3, last_epoch=-1)
+            milestones=[10, 60, 90], gamma=0.1, last_epoch=-1)
 
 dist = [0.14, 0.15, 0.15, 0.12, 0.15, 0.09, 0.01, 0.12, 0.03, 0.02, 0.01, 0.01]
 

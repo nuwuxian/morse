@@ -22,7 +22,6 @@ def cal_simialrity(data, gt, num_class):
     
     return np.matmul(feat, feat.T)
 
-
 def refine_pesudo_label(xw, probs, threshold, prototype, model):
     # xw: batch_sz * dim
     # prototype: k * dim 
@@ -36,11 +35,10 @@ def refine_pesudo_label(xw, probs, threshold, prototype, model):
     proto_pred = torch.argmax(simi, -1)
     
     yu = torch.argmax(probs, -1)
-    mask = (torch.max(probs, -1)[0] >= threshold).to(dtype=torch.float32)
+    mask = (-torch.log(torch.max(probs, -1)[0]) <= threshold.rho_t).to(dtype=torch.float32)
     mask = torch.logical_and(mask, proto_pred == yu)
 
     return yu, mask
-
 
 def update_proto(x, y, prototype, model):
     # prototype: k * dim
@@ -178,7 +176,6 @@ class WarmupCosineLrScheduler(torch.optim.lr_scheduler._LRScheduler):
             ratio = self.warmup_ratio ** (1. - alpha)
         return ratio
 
-
 # Recording Tools
 class AverageMeter(object):
     """Computes and stores the average and current value
@@ -198,6 +195,25 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
+
+class dynamic_threshold(object):
+    def __init__(self, c, rho, gamma):
+        self.c = c
+        self.rho = rho
+        self.gamma = gamma
+        # init_v
+        self.rho_t = self.rho * self.c
+        self.cnt = 0
+
+    def update(self):
+        self.rho_t = self.rho_t * 1.0 /self.gamma
+        self.rho_t = max(self.rho_t, 0.05)
+        self.cnt += 1
+
+    def reset(self):
+        self.rhot_t = self.rho * self.c
+        self.cnt = 0
 
 def init_prototype(labeled_loader, model, device, class_num):
     ret_feat, ret_label = [], []
