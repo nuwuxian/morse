@@ -312,7 +312,7 @@ class our_match(object):
             self.optimizer.zero_grad()
             loss = nn.CrossEntropyLoss()(logits, y)
             if self.args.use_penalty:
-               loss += self.conf_penalty(logits)
+               loss += 0.5 * self.conf_penalty(logits)
             loss.backward()
             self.optimizer.step()
             losses.update(loss.item(), len(logits))

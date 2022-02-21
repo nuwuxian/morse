@@ -3,7 +3,7 @@ import os
 from scipy import stats
 import pandas as pd
 
-path = './output/real/Imb-method-reweight_reweight-start-50_lr-0.001_weight-decay-0.0002'
+path = './output/real/reweight-start-50_dist-alignment-False_use-true-distribution-False_use-proto-False'
 num_class = 12
 
 #  Baseline Accuracy for malware-real 
