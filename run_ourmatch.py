@@ -66,7 +66,7 @@ parser.add_argument('--unlabel_reweight', default=True, type=bool)
 
 parser.add_argument('--dist_alignment', default=False, type=bool)
 parser.add_argument('--dist_alignment_eps', default=1e-6, type=float)
-parser.add_argument('--dist_alignment_batches', default=32, type=int)
+parser.add_argument('--dist_alignment_batches', default=5, type=int)
 
 parser.add_argument('--use_scl', default=False, type=bool)
 parser.add_argument('--lambda-s', default=0.1, type=float)
@@ -112,7 +112,7 @@ sub_fold = 'real/'
 if args.dataset_origin != 'real':
     sub_fold = 'syn/'
 
-out_dir = 'output/' + sub_fold + 'reweight-start-' + str(args.reweight_start) \
+out_dir = 'tmp/' + sub_fold + 'reweight-start-' + str(args.reweight_start) \
             + '_dist-alignment-' + str(args.dist_alignment) + '_use-true-distribution-' \
             + str(args.use_true_distribution) + '_use-proto-' + str(args.use_proto)
 
