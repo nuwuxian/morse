@@ -200,7 +200,7 @@ class our_match(object):
         # labeled distribution
         labeled_dist = get_labeled_dist(labeled_dataset).to(self.args.device)
 
-        debug_t_list = [AverageMeter() for _ in range(self.args.num_class)]
+        debug_t_list = [AverageMeter() for _ in range(self.args.num_class * 2)]
         debug_list = [AverageMeter() for _ in range(self.args.num_class * 2)]
 
         for batch_idx, (b_l, b_u, b_imb_l) in enumerate(zip(labeled_loader, unlabeled_loader, imb_labeled_loader)):
@@ -264,8 +264,8 @@ class our_match(object):
                        yu, mask = refine_pesudo_label(xw, probs, self.threshold, self.prototype, self.model)
 
                 # cal the max-probs of each class
-                debug_t = debug_threshold(probs, self.args.num_class)
-                for i in range(len(debug_threshold)):
+                debug_t = debug_threshold(probs, gt_u, mask, self.args.num_class)
+                for i in range(len(debug_t_list)):
                     debug_t_list[i].update(debug_t[i])
 
                 debug_ratio = debug_unlabel_info(yu, gt_u, mask, self.args.num_class)
@@ -314,10 +314,11 @@ class our_match(object):
             # debug info
             if i < self.args.num_class:
                self.writer.add_scalar('UnLabel_class' + str(i) + '-clean_ratio', debug_list[i].avg, self.update_cnt)
-               self.writer.add_scalar('UnLabel_class' + str(i) + '-confidence', debug_t_list[i].avg, self.update_cnt)
+               self.writer.add_scalar('UnLabel_class' + str(i) + '-true-confidence', debug_t_list[i].avg, self.update_cnt)
             else:
                cls = i % self.args.num_class
                self.writer.add_scalar('UnLabel_class' + str(cls) + '-prob', debug_list[i].avg, self.update_cnt)
+               self.writer.add_scalar('UnLabel_class' + str(cls) + '-false-confidence', debug_t_list[i].avg, self.update_cnt)
 
 
     def warmup(self, epoch, trainloader):

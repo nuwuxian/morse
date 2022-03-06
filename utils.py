@@ -136,20 +136,36 @@ def debug_real_unlabel_info(pred, gt, mask):
     return debug_ratio
 
 
-def debug_threshold(prob, num_class):
-    yu, max_prob = torch.max(prob, axis=1)
-
+def debug_threshold(prob, gt, mask, num_class):
+    max_prob, yu = torch.max(prob, axis=1)
     yu = yu.data.data.cpu().numpy()
     max_prob = max_prob.data.cpu().numpy()
+    gt = gt.data.cpu().numpy()
+    mask = mask.data.cpu().numpy()
+    # select the true data
+    idx = np.where(mask == True)[0]
+    yu = yu[idx]
+    gt = gt[idx]
+    max_prob = max_prob[idx]
+    cls_confidence_true = []
+    cls_confidence_false = []
 
-    cls_confidence = []
     for i in range(num_class):
         idx = np.where(yu == i)[0]
-        cls_confidence.append(np.mean(max_prob[idx]))
-    return cls_confidence
-
-
-
+        if len(idx) == 0:
+            cls_confidence_true.append(0)
+            cls_confidence_false.append(0)
+        else:
+            true_idx = np.where(gt[idx] == i)[0]
+            false_idx = np.where(gt[idx] != i)[0]
+            prob_true, prob_false = 0, 0
+            if len(true_idx) > 0:
+                prob_true = np.mean(max_prob[idx[true_idx]])
+            if len(false_idx) > 0:
+                prob_false = np.mean(max_prob[idx[false_idx]])
+            cls_confidence_true.append(prob_true)
+            cls_confidence_false.append(prob_false)
+    return cls_confidence_true + cls_confidence_false
 # Cosine learning rate scheduler.
 #
 # From https://github.com/valencebond/FixMatch_pytorch/blob/master/lr_scheduler.py

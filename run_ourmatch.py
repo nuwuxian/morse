@@ -49,7 +49,7 @@ parser.add_argument('--lambda-u', default=1.0, type=float,
 parser.add_argument('--T', default=0.5, type=float,
                         help='pseudo label temperature') # higer temperature, probs are closer
 
-parser.add_argument('--threshold', default=0.95, type=float, # 0.95 for malware-real, 0.40 for malware-syn
+parser.add_argument('--threshold', default=0.40, type=float, # 0.95 for malware-real, 0.40 for malware-syn
                         help='pseudo label threshold')
 # whether use the pretrain model
 parser.add_argument('--use_pretrain', default=True, type=bool)
@@ -73,7 +73,7 @@ parser.add_argument('--lambda-s', default=0.1, type=float)
 
 parser.add_argument('--use_proto', default=False, type=bool)
 parser.add_argument('--use_hard_labels', default=False, type=bool)
-parser.add_argument('--use_dynamic_threshold', default=True, type=bool)
+parser.add_argument('--use_dynamic_threshold', default=False, type=bool)
 parser.add_argument('--epsilon', default=0.7, type=float)
 
 # real-dataset | synthetic-dataset
@@ -149,7 +149,7 @@ else:
 # malware_syn: [60, 80], gamma = 0.5, batch_norm=nn.BatchNorm1d
 # intrusion: [10, 60], gamma = 0.1, batch_norm=None
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-            milestones=[30, 60], gamma=0.1, last_epoch=-1)
+            milestones=[30, 60], gamma=0.3, last_epoch=-1)
 
 dist = [0.14, 0.15, 0.15, 0.12, 0.15, 0.09, 0.01, 0.12, 0.03, 0.02, 0.01, 0.01]
 
