@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 from sklearn.metrics import confusion_matrix
 from utils import AverageMeter, predict_dataset_softmax, get_labeled_dist
-from utils import debug_label_info, debug_unlabel_info, debug_real_label_info, debug_real_unlabel_info
+from utils import debug_label_info, debug_unlabel_info, debug_real_label_info, debug_real_unlabel_info, debug_threshold
 from utils import refine_pesudo_label, update_proto, init_prototype, dynamic_threshold
 from dataset import Train_Dataset, Semi_Labeled_Dataset, Semi_Unlabeled_Dataset,  ImbalancedDatasetSampler
 from torch.utils.data import DataLoader
@@ -200,6 +200,7 @@ class our_match(object):
         # labeled distribution
         labeled_dist = get_labeled_dist(labeled_dataset).to(self.args.device)
 
+        debug_t_list = [AverageMeter() for _ in range(self.args.num_class)]
         debug_list = [AverageMeter() for _ in range(self.args.num_class * 2)]
 
         for batch_idx, (b_l, b_u, b_imb_l) in enumerate(zip(labeled_loader, unlabeled_loader, imb_labeled_loader)):
@@ -262,6 +263,11 @@ class our_match(object):
                     else:
                        yu, mask = refine_pesudo_label(xw, probs, self.threshold, self.prototype, self.model)
 
+                # cal the max-probs of each class
+                debug_t = debug_threshold(probs, self.args.num_class)
+                for i in range(len(debug_threshold)):
+                    debug_t_list[i].update(debug_t[i])
+
                 debug_ratio = debug_unlabel_info(yu, gt_u, mask, self.args.num_class)
                 for i in range(len(debug_list)):
                   debug_list[i].update(debug_ratio[i])
@@ -308,6 +314,7 @@ class our_match(object):
             # debug info
             if i < self.args.num_class:
                self.writer.add_scalar('UnLabel_class' + str(i) + '-clean_ratio', debug_list[i].avg, self.update_cnt)
+               self.writer.add_scalar('UnLabel_class' + str(i) + '-confidence', debug_t_list[i].avg, self.update_cnt)
             else:
                cls = i % self.args.num_class
                self.writer.add_scalar('UnLabel_class' + str(cls) + '-prob', debug_list[i].avg, self.update_cnt)

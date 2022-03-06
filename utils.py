@@ -8,6 +8,7 @@ def make_timestamp():
     ISO_TIMESTAMP = "%Y%m%d_%H%M%S"
     return datetime.datetime.now().strftime(ISO_TIMESTAMP)
 
+
 def cal_simialrity(data, gt, num_class):
     # data: n * dim
     feat = []
@@ -133,6 +134,21 @@ def debug_real_unlabel_info(pred, gt, mask):
     debug_ratio.append(class_11_clean)
     
     return debug_ratio
+
+
+def debug_threshold(prob, num_class):
+    yu, max_prob = torch.max(prob, axis=1)
+
+    yu = yu.data.data.cpu().numpy()
+    max_prob = max_prob.data.cpu().numpy()
+
+    cls_confidence = []
+    for i in range(num_class):
+        idx = np.where(yu == i)[0]
+        cls_confidence.append(np.mean(max_prob[idx]))
+    return cls_confidence
+
+
 
 # Cosine learning rate scheduler.
 #
