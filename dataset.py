@@ -33,7 +33,7 @@ def get_dataset(root, dataset, noise_type, imb_type, imb_ratio, num_classes=10):
     dataset_train = Train_Dataset(train_data, train_labels, num_classes=num_classes, noise_type=noise_type)
     dataset_test = Test_Dataset(test_data, test_labels)
 
-    if imb_type != 'none':
+    if noise_type != 'none':
         train_labels = np.array(dataset_train.train_noisy_labels)
         clean_labels = dataset_train.gt
     # synthetic dataset: class-6 | class-2, class-9 | class-2, class-4, class-5

@@ -7,7 +7,7 @@ import numpy as np
 from numpy.testing import assert_array_almost_equal
 import torch
 
-def solver(noise_rate, imb_type='step', imb_ratio=0.1, max_num=5000, num_class=10):
+def solver(noise_rate, imb_type='step', imb_ratio=0.1, max_num=1000, num_class=10):
     from scipy import optimize
 
     eq_num = num_class * 3
@@ -266,7 +266,7 @@ def noisify_multiclass_symmetric(y_train, noise, random_state=None, nb_classes=1
 def noisify_imb(y_train, noise, random_state=None, nb_classes=10, imb_type='step', imb_rate=0.1):
     # init the matrix
     n = noise
-    P = solver(n, imb_type, imb_rate)
+    P = solver(n, imb_type, imb_rate, num_classes=nb_classes)
     y_train_noisy = multiclass_noisify(y_train, P=P,
                     random_state=random_state)
     

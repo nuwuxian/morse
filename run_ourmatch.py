@@ -57,7 +57,7 @@ parser.add_argument('--use_pretrain', default=True, type=bool)
 parser.add_argument('--clean_method', default='confidence', type=str)
 parser.add_argument('--clean_theta', default=0.95, type=float)
 # imbalance method
-parser.add_argument('--imb_method', default='reweight', type=str)   # resample / mixup / reweight
+parser.add_argument('--imb_method', default='reweight', type=str)   # resample / mixup / logits/ reweight
 parser.add_argument('--reweight_start', default=50, type=int)
 # mixup alpha
 parser.add_argument('--alpha', default=10, type=int)
@@ -72,7 +72,6 @@ parser.add_argument('--use_scl', default=False, type=bool)
 parser.add_argument('--lambda-s', default=0.1, type=float)
 
 parser.add_argument('--use_proto', default=False, type=bool)
-parser.add_argument('--use_penalty', default=False, type=bool)
 parser.add_argument('--use_hard_labels', default=False, type=bool)
 parser.add_argument('--use_dynamic_threshold', default=False, type=bool)
 parser.add_argument('--epsilon', default=0.7, type=float)
@@ -112,9 +111,10 @@ sub_fold = 'real/'
 if args.dataset_origin != 'real':
     sub_fold = 'syn/'
 
-out_dir = 'tmp/' + sub_fold + 'reweight-start-' + str(args.reweight_start) \
-            + '_dist-alignment-' + str(args.dist_alignment) + '_use-true-distribution-' \
-            + str(args.use_true_distribution) + '_use-proto-' + str(args.use_proto)
+out_dir = 'tmp/' + sub_fold + 'imb-method_' + str(args.imb_method) + '_noise-type_' + str(args.noise_type) + '_noise-rate_' + str(args.noise_rate)
+                + '_imb-type_' + str(args.imb_type) + '_imb-rate_' + str(args.imb_ratio) + 'reweight-start-' \
+                + str(args.reweight_start) + '_dist-alignment-' + str(args.dist_alignment) + '_use-hard-labels_' \
+                + str(args.use_hard_labels) + '_ratio_' + str(args.epsilon)
 
 timestamp = make_timestamp()
 exp_name = args.seed
@@ -145,8 +145,9 @@ else:
     optimizer = torch.optim.SGD(model.parameters(), args.lr, momentum=args.momentum,
                                 weight_decay=args.weight_decay, nesterov=args.nesterov)
 # Cosin Learning Rates
-# malware_real: [10, 60, 90], gamma = 0.3
-# malware_syn: [60, 80], gamma = 0.5
+# malware_real: [10, 60, 90], gamma = 0.3, batch_norm=nn.BatchNorm1d
+# malware_syn: [60, 80], gamma = 0.5, batch_norm=nn.BatchNorm1d
+# intrusion: [10, 60], gamma = 0.1, batch_norm=None
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
             milestones=[10, 60, 90], gamma=0.3, last_epoch=-1)
 

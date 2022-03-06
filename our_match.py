@@ -39,7 +39,6 @@ class our_match(object):
         self.per_cls_weights = None
         # SupConLoss
         self.criterion_con = SupConLoss(temperature=0.07)
-        self.conf_penalty = NegEntropy()
         self.threshold = None
 
         # mix-up
@@ -131,6 +130,12 @@ class our_match(object):
         imb_labeled_loader = DataLoader(dataset=labeled_dataset, batch_size=l_batch, shuffle=False,
                              num_workers=self.args.num_workers, pin_memory=True, sampler=imb_labeled_sampler,
                              drop_last=True)
+        if args.imb_method == 'logits':
+            cls_num_list = imb_labeled_sampler.label_to_count
+            cls_pro = np.array(cls_num_list) / np.sum(np.array(cls_num_list))
+            logit = np.log(cls_pro + 1e-12)
+            self.logit = torch.FloatTensor(logit).to(self.args.device)
+
         # update criterion
         if self.args.imb_method == 'reweight' and self.args.reweight_start != -1:
            cls_num_list = imb_labeled_sampler.label_to_count
@@ -230,6 +235,11 @@ class our_match(object):
                   logits_x = self.model(xl)
                   Lx = F.cross_entropy(logits_x, yl, weight=self.per_cls_weights, reduction='mean')
 
+                elif self.args.imb_method == 'logit':
+                  logits_x = self.model(x)
+                  logits_x += self.logit
+                  Lx = F.cross_entropy(logits_x, yl, reduction='mean')
+
                 # Use Suploss
                 if self.args.use_scl:
                     feat = self.model.forward_feat(xl)
@@ -257,12 +267,16 @@ class our_match(object):
                   debug_list[i].update(debug_ratio[i])
 
                 # use hardlabels or not
-                if self.args.use_hard_labels:
-                   Lu = (F.cross_entropy(logits_xs, yu, weight=self.per_cls_weights, reduction='none') * mask).mean()
-                else:
-                   one_hot = F.one_hot(given_u, num_classes=self.args.num_class).float()
-                   probs = probs * self.args.epsilon + (1 - self.args.epsilon) * one_hot
-                   Lu = (ce_loss(logits_xs, probs, use_hard_labels=False, weight=self.per_cls_weights, reduction='none') * mask).mean()
+                if self.imb_method == 'reweight':
+                    if self.args.use_hard_labels:
+                       Lu = (F.cross_entropy(logits_xs, yu, weight=self.per_cls_weights, reduction='none') * mask).mean()
+                    else:
+                       one_hot = F.one_hot(given_u, num_classes=self.args.num_class).float()
+                       probs = probs * self.args.epsilon + (1 - self.args.epsilon) * one_hot
+                       Lu = (ce_loss(logits_xs, probs, use_hard_labels=False, weight=self.per_cls_weights, reduction='none') * mask).mean()
+                elif self.imb_method == 'logit':
+                    logits_xs += self.logit 
+                    Lu = (F.cross_entropy(logits_xs, yu, reduction='none') * mask).mean()
 
                 if self.args.use_scl:
                    loss = Lx + self.args.lambda_u * Lu + self.args.lambda_s * Ls
@@ -311,8 +325,6 @@ class our_match(object):
             
             self.optimizer.zero_grad()
             loss = nn.CrossEntropyLoss()(logits, y)
-            if self.args.use_penalty:
-               loss += 0.5 * self.conf_penalty(logits)
             loss.backward()
             self.optimizer.step()
             losses.update(loss.item(), len(logits))

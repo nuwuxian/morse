@@ -27,13 +27,6 @@ def ce_loss(logits, targets, use_hard_labels=True, weight=None, reduction='none'
            nll_loss = torch.sum(-targets * log_pred * weight, dim=1)
         return nll_loss
 
-
-class NegEntropy(object):
-    def __call__(self,outputs):
-        probs = torch.softmax(outputs, dim=1)
-        return torch.mean(torch.sum(probs.log()*probs, dim=1))
-
-
 class LDAMLoss(nn.Module):
     
     def __init__(self, cls_num_list, device, max_m=0.5, weight=None, s=30):
