@@ -208,7 +208,7 @@ class dynamic_threshold(object):
 
     def update(self):
         self.rho_t = self.rho_t * 1.0 /self.gamma
-        self.rho_t = max(self.rho_t, 0.05)
+        self.rho_t = max(self.rho_t, 4e-3)
         self.cnt += 1
 
     def reset(self):

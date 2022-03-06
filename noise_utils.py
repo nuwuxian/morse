@@ -266,7 +266,7 @@ def noisify_multiclass_symmetric(y_train, noise, random_state=None, nb_classes=1
 def noisify_imb(y_train, noise, random_state=None, nb_classes=10, imb_type='step', imb_rate=0.1):
     # init the matrix
     n = noise
-    P = solver(n, imb_type, imb_rate, num_classes=nb_classes)
+    P = solver(n, imb_type, imb_rate, num_class=nb_classes)
     y_train_noisy = multiclass_noisify(y_train, P=P,
                     random_state=random_state)
     

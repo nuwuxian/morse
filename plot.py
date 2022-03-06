@@ -1,52 +1,25 @@
 import numpy as np
 import os
 from scipy import stats
-import pandas as pd
 
-path = './best/real/reweight-start-50_dist-alignment-False_use-true-distribution-False_use-proto-False'
-num_class = 12
+base_path = '/home/xkw5132/ccs_noise/tmp/syn/imb-method_logits_noise-type_imb_step_0.1_noise-rate_0.5_imb-type_step_imb-rate_0.1_reweight-start-50_dist-alignment-True_use-hard-labels_False_ratio_0.7'
+path = '/home/xkw5132/ccs_noise/tmp/syn/imb-method_logits_noise-type_imb_step_0.1_noise-rate_0.5_imb-type_step_imb-rate_0.1_reweight-start-50_dist-alignment-True_use-hard-labels_False_ratio_0.7'
 
 #  Baseline Accuracy for malware-real 
-base_acc = []
-# add 0-3
-class_0 = [0.81,0.87,0.83,0.86,0.91,0.84]
-class_0 = np.array(class_0)
-base_acc.append(class_0)
-class_1 = [1.0,1.0,1.0,1.0,1.0,1.0]
-class_1 = np.array(class_1)
-base_acc.append(class_1)
-class_2 = [0.99,0.98,0.99,0.99,0.99,0.98]
-class_2 = np.array(class_2)
-base_acc.append(class_2)
-class_3 = [0.98,0.97,0.98,0.98,0.98,0.98]
-class_3 = np.array(class_3)
-base_acc.append(class_3)
-# add 4-7
-class_4 = [1.0,0.97,0.96,1.0,0.99,1.0]
-class_4 = np.array(class_4)
-base_acc.append(class_4)
-class_5 = [1.0,1.0,1.0,1.0,1.0,1.0]
-class_5 = np.array(class_5)
-base_acc.append(class_5)
-class_6 = [0.97,0.97,0.96,0.96,0.96,0.97]
-class_6 = np.array(class_6)
-base_acc.append(class_6)
-class_7 = [1.0,1.0,0.99,1.0,1.0,1.0]
-class_7 = np.array(class_7)
-base_acc.append(class_7)
-# add 8-11
-class_8 = [1.0,0.98,0.96,0.98,0.95,0.98]
-class_8 = np.array(class_8)
-base_acc.append(class_8)
-class_9 = [1.0,1.0,1.0,1.0,1.0,1.0]
-class_9 = np.array(class_9)
-base_acc.append(class_9)
-class_10 = [0.99,0.98,0.98,0.99,0.98,0.98]
-class_10 = np.array(class_10)
-base_acc.append(class_10)
-class_11 = [0.46,0.41,0.51,0.4,0.46,0.42]
-class_11 = np.array(class_11)
-base_acc.append(class_11)
+
+# recording the baseline acc for each class
+base, base_large, base_small = [], [], []
+for fold in os.listdir(base_path):
+    
+    test_acc = np.load(base_path + '/' + fold + '/best_results.npz')['test_acc']
+    class_acc = np.load(base_path + '/' +fold + '/best_results.npz')['test_class_acc']
+    base.append(test_acc)
+    base_large.append(np.mean(class_acc[:5]))
+    base_small.append(np.mean(class_acc[5:]))
+    
+base = np.array(base)
+base_large = np.array(base_large)
+base_small = np.array(base_small)
 
 def diff_p_value(diff):
     ref = np.zeros_like(diff)
@@ -55,20 +28,46 @@ def diff_p_value(diff):
 
 avg_noise = []
 avg_noise_acc = []
+large_acc = []
+small_acc = []
+
+coteaching = False
 
 for fold in os.listdir(path):
-    test_acc = np.load(path + '/' + fold + '/best_results.npz')['test_acc']
-    class_acc = np.load(path + '/' +fold + '/best_results.npz')['test_class_acc']
-    avg_noise.append(test_acc)
-    avg_noise_acc.append(class_acc)
+    if not coteaching:
+        test_acc = np.load(path + '/' + fold + '/best_results.npz')['test_acc']
+        class_acc = np.load(path + '/' +fold + '/best_results.npz')['test_class_acc']
+        avg_noise.append(test_acc)
+        avg_noise_acc.append(class_acc)
+        large_acc.append(np.mean(class_acc[:5]))
+        small_acc.append(np.mean(class_acc[5:]))
+    else:
+        test_acc1 = np.load(path + '/' + fold + '/best_results.npz')['test_acc1']
+        class_acc1 = np.load(path + '/' +fold + '/best_results.npz')['test_class_acc1']
+        test_acc2 = np.load(path + '/' + fold + '/best_results.npz')['test_acc2']
+        class_acc2 = np.load(path + '/' +fold + '/best_results.npz')['test_class_acc2']
+        if test_acc1 > test_acc2:
+            avg_noise.append(test_acc1)
+            avg_noise_acc.append(class_acc1)
+            large_acc.append(np.mean(class_acc1[:5]))
+            small_acc.append(np.mean(class_acc1[5:]))
+        else:
+            avg_noise.append(test_acc2)
+            avg_noise_acc.append(class_acc2)
+            large_acc.append(np.mean(class_acc2[:5]))
+            small_acc.append(np.mean(class_acc2[5:]))
+
 avg_acc = np.array(avg_noise)
+large_acc = np.array(large_acc)
+small_acc = np.array(small_acc)
 # Format print
-print('Mean Accuracy is %.2f Std is %.2f' %(np.mean(avg_acc), np.std(avg_acc)))
+print('Mean Accuracy is %.4f Std is %.4f' %(np.mean(avg_acc), np.std(avg_acc)))
+print('Large Accuracy is %.4f Std is %.4f' %(np.mean(large_acc), np.std(large_acc)))
+print('Small Accuracy is %.4f Std is %.4f' %(np.mean(small_acc), np.std(small_acc)))
 class_acc = np.vstack(avg_noise_acc)
 print(class_acc)
 
-for i in range(num_class):
-    p_value = 0.0
-    #diff_class_i = class_acc[:, i] - base_acc[i]
-    #p_value = diff_p_value(diff_class_i)
-    print('Class' + str(i) + ' Mean Accuracy is %.2f, Std is %.2f, P is %.2f' %(np.mean(class_acc[:, i]), np.std(class_acc[:, i]), p_value))
+diff_avg = avg_acc - base
+diff_large = large_acc - base_large
+diff_small = small_acc - base_small
+print('P is %.3f P_large is %.3f P_small is %.3f' %(diff_p_value(diff_avg), diff_p_value(diff_large), diff_p_value(diff_small)))
