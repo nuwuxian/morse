@@ -269,15 +269,25 @@ def init_prototype(labeled_loader, model, device, class_num):
 
     return prototype
 
-def predict_dataset_softmax(predict_loader, model, device, train_num):
+def predict_dataset_softmax(predict_loader, model, device, train_num, threshold=0.95):
     model.eval()
     loss_outs = torch.zeros(train_num).to(device)
     crit = nn.CrossEntropyLoss(reduction='none')
+    # model predictions
+    model_pred = []
     with torch.no_grad():
         for x, y, idx in predict_loader:
             x = x.to(device)
             y = y.to(device)
             logits1 = model(x)
+            prob, pred = torch.max(F.softmax(logits1, dim=1), dim=1)
+            prob = prob.data.cpu().numpy()
+            v_idx = np.where(prob >= threshold)[0]
+            model_pred.append(pred.data.cpu().numpy()[v_idx])
+
             loss = crit(logits1, y)
             loss_outs[idx] = loss
-    return loss_outs
+    
+    # stack pred
+    model_pred = np.hstack(model_pred)
+    return loss_outs, model_pred

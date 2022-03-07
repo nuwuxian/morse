@@ -2,7 +2,7 @@ import numpy as np
 import os
 from scipy import stats
 
-path = '/home/xkw5132/ccs_noise/tmp/syn/imb-method_logits_noise-type_imb_step_0.1_noise-rate_0.5_imb-type_step_imb-rate_0.1_reweight-start-50_dist-alignment-False_use-hard-labels_False_ratio_0.7'
+path = '/home/xkw5132/ccs_noise/tmp/real/imb-method_reweight_noise-type_none_noise-rate_0.5_imb-type_none_imb-rate_0.1_reweight-start-50_dist-alignment-False_use-hard-labels_False_ratio_1.0'
 base_path=path
 #  Baseline Accuracy for malware-real 
 

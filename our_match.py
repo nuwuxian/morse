@@ -80,7 +80,7 @@ class our_match(object):
         return labeled_indexs, unlabeled_indexs
 
     def update_loader(self, train_loader, train_data, clean_targets, noisy_targets):
-        soft_outs = predict_dataset_softmax(train_loader, self.model, self.args.device, self.train_num)
+        soft_outs, preds = predict_dataset_softmax(train_loader, self.model, self.args.device, self.train_num)
         # initialize the threshold
         if self.threshold == None:
           if self.args.use_dynamic_threshold:
@@ -150,6 +150,20 @@ class our_match(object):
            self.per_cls_weights = per_cls_weights
            for i in range(self.args.num_class):
                self.writer.add_scalar('Class' + str(i) + '_weight',  self.per_cls_weights[i], global_step=self.update_cnt)
+           # pred
+           model_num_list = []
+           for i in range(self.args.num_class):
+               idx = np.where(preds == i)[0]
+               if len(idx) == 0: model_num_list.append(1)
+               else: model_num_list.append(len(idx))
+           effective_num = 1.0 - np.power(beta, model_num_list)
+           per_cls_weights = (1.0 - beta) / np.array(effective_num)
+           per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
+           per_cls_weights = torch.FloatTensor(per_cls_weights).to(self.args.device)
+           self.unlabel_per_cls_weights = per_cls_weights
+           for i in range(self.args.num_class):
+               self.writer.add_scalar('Class' + str(i) + '_unlabel_weight',  self.unlabel_per_cls_weights[i], global_step=self.update_cnt)           
+
         print('Labeled num is %d Unlabled num is %d' %(labeled_num, unlabeled_num))
 
         return labeled_dataset, labeled_loader,  unlabeled_loader, imb_labeled_loader
@@ -275,11 +289,11 @@ class our_match(object):
                 # use hardlabels or not
                 if self.args.imb_method == 'reweight':
                     if self.args.use_hard_labels:
-                       Lu = (F.cross_entropy(logits_xs, yu, weight=self.per_cls_weights, reduction='none') * mask).mean()
+                       Lu = (F.cross_entropy(logits_xs, yu, weight=self.unlabel_per_cls_weights, reduction='none') * mask).mean()
                     else:
                        one_hot = F.one_hot(given_u, num_classes=self.args.num_class).float()
                        probs = probs * self.args.epsilon + (1 - self.args.epsilon) * one_hot
-                       Lu = (ce_loss(logits_xs, probs, use_hard_labels=False, weight=self.per_cls_weights, reduction='none') * mask).mean()
+                       Lu = (ce_loss(logits_xs, probs, use_hard_labels=False, weight=self.unlabel_per_cls_weights, reduction='none') * mask).mean()
                 elif self.args.imb_method == 'logits':
                     logits_xs += self.logit 
                     Lu = (F.cross_entropy(logits_xs, yu, reduction='none') * mask).mean()
