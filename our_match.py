@@ -391,11 +391,12 @@ class our_match(object):
         acc = 100 * float(correct) / float(total)
         print(class_acc)
         print('Epoch [%3d/%3d] Test Acc: %.2f%%' %(epoch, self.args.epoch, acc))
+        gap_cls = int(self.args.num_class / 2)
 
         if self.args.dataset_origin != 'real':
-           print('Large Class Accuracy is %.2f Small Class Accuracy is %.2f' %(np.mean(class_acc[:5]), np.mean(class_acc[5:])))
-           self.writer.add_scalar('Large Class acc', np.mean(class_acc[:5]), epoch)
-           self.writer.add_scalar('Small Class acc', np.mean(class_acc[5:]), epoch)
+           print('Large Class Accuracy is %.2f Small Class Accuracy is %.2f' %(np.mean(class_acc[:gap_cls]), np.mean(class_acc[gap_cls:])))
+           self.writer.add_scalar('Large Class acc', np.mean(class_acc[:gap_cls]), epoch)
+           self.writer.add_scalar('Small Class acc', np.mean(class_acc[gap_cls:]), epoch)
 
         for i in range(self.args.num_class):
             self.writer.add_scalar('Test Class-' + str(i) + ' acc', class_acc[i], epoch)
