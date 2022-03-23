@@ -37,6 +37,7 @@ class our_match(object):
            self.criterion = nn.CrossEntropyLoss().to(self.args.device)
 
         self.per_cls_weights = None
+        self.unlabel_per_cls_weights = None
         # SupConLoss
         self.criterion_con = SupConLoss(temperature=0.07)
         self.threshold = None
