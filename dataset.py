@@ -5,7 +5,7 @@ from noise_utils import noisify
 from utils import aug, cal_simialrity
 import torch
 
-def get_dataset(root, dataset, noise_type, imb_type, imb_ratio, num_classes=10):
+def get_dataset(root, dataset, noise_type, noise_rate, imb_type, imb_ratio, num_classes=10):
     # noise-data
     data = np.load(root + '/' + dataset + '.npz')
     train_data = data['X_train']
@@ -30,7 +30,7 @@ def get_dataset(root, dataset, noise_type, imb_type, imb_ratio, num_classes=10):
         # clean-label
         clean_labels = np.load(root + '/' + dataset +'_true.npz')['y_train']
 
-    dataset_train = Train_Dataset(train_data, train_labels, num_classes=num_classes, noise_type=noise_type)
+    dataset_train = Train_Dataset(train_data, train_labels, num_classes=num_classes, noise_type=noise_type, noise_rate=noise_rate)
     dataset_test = Test_Dataset(test_data, test_labels)
 
     if noise_type != 'none':
