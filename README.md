@@ -18,19 +18,19 @@ usage: run_ourmatch.py [--lr learning rate] [--batch_size batch_size] [--input_d
                        [--noise_rate noise_rate] [--noise_type noise_type] [--imb_type imb_type] [--imb_ratio imb_ratio] [--threshold threshold]
                        [--reweight_start reweight_start_epoch] [--dataset_origin dataset]
 
-  arguments:
-    --lr               learning rate (default value is the value in the file `run_ourmatch.py`)
-    --batch_size       batch size (default value is the value in the file `run_ourmatch.py`)
-    --input_dim        extracted malware feature dimension (i.e., 1024 in the real-world dataset)
-    --epoch            total training epochs
-    --warmup           warmup period
-    --noise_rate       noise ratio of the dataset
-    --noise_type       noise type of the dataset
-    --imb_type         imbalance type of the dataset (either none or step)
-    --imb_ratio        imbalance ratio of the dataset (i.e., 0.05/0.01 in the synthetic dataset)
-    --threshold        pseudo label threshold (i.e., 0.95 in the real-world dataset)
-    --reweight_start   starting reweighting epoch
-    --dataset_origin   dataset for training (i.e., either the synthetic or real-world dataset)
+arguments:
+  --lr               learning rate (default value is the value in the file `run_ourmatch.py`)
+  --batch_size       batch size (default value is the value in the file `run_ourmatch.py`)
+  --input_dim        extracted malware feature dimension (i.e., 1024 in the real-world dataset)
+  --epoch            total training epochs
+  --warmup           warmup period
+  --noise_rate       noise ratio of the dataset
+  --noise_type       noise type of the dataset
+  --imb_type         imbalance type of the dataset (either none or step)
+  --imb_ratio        imbalance ratio of the dataset (i.e., 0.05/0.01 in the synthetic dataset)
+  --threshold        pseudo label threshold (i.e., 0.95 in the real-world dataset)
+  --reweight_start   starting reweighting epoch
+  --dataset_origin   dataset for training (i.e., either the synthetic or real-world dataset)
 ```
 
 
