@@ -1,7 +1,7 @@
-# ccs_noise
+# CCS_NoiseLearning
 This repo contains the code for the paper titled "From Grim Reality to Practical Solution: Malware Classification in Real-World Noise".
 
-## requirement
+## Requirement
 This codebase is written for ```python3.7```. The requirement of our method is listed in ```requirements.txt``` under the morse folder.
 
 ## Code Structure and instructions
