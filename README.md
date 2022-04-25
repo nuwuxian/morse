@@ -7,7 +7,8 @@ This codebase is written for ```python3.7```. The requirement of our method is l
 ## Code Structure and instructions
 ### Basics
 - Our method is implemented in the file `our_match.py`
-- The eight baselines are in `baselines`.
+- The eight baselines are in `baselines`. Note that in subfolder `baselines/NADAP`, it include three baseline methods: GCE (`gce.py`), Bootstap (`bootstrap.py`) and Noise-adaption (`main.py`). 
+
 - Experiments settings and configurations used for different datasets are in the corresponding config json files.
 ### Data
 - The `data` folder contains both the real-world and synthetic dataset. 
