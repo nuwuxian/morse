@@ -27,7 +27,7 @@ parser.add_argument('--input_dim', type=int, default=2381) # 1024 for malware-re
 parser.add_argument('--gamma', type=float, default=0.95, metavar='M',help='Learning rate step gamma (default: 0.7)')
 parser.add_argument('--dataset', type = str, help = 'mnist, cifar10, cifar100, or imagenet_tiny', default = 'malware')
 
-parser.add_argument('--epoch', type=int, default=100) # 140 for malware-real, 150 for malware-syn
+parser.add_argument('--epoch', type=int, default=100) # 140 for malware-real, 100 for malware-syn
 parser.add_argument('--warmup', type=int, default=5) # 5 for malware-real, 30 for malware-syn
 parser.add_argument('--optimizer', type = str, default='adam')  # adam for malware-real, sgd for malware-syn
 parser.add_argument('--cuda', type = int, default=2)
@@ -74,7 +74,7 @@ parser.add_argument('--lambda-s', default=0.1, type=float)
 parser.add_argument('--use_proto', default=False, type=bool)
 parser.add_argument('--use_hard_labels', default=False, type=bool)
 parser.add_argument('--use_dynamic_threshold', default=False, type=bool)
-parser.add_argument('--epsilon', default=0.95, type=float)
+parser.add_argument('--epsilon', default=0.95, type=float) # 0.7 for malware-real
 
 # real-dataset | synthetic-dataset
 parser.add_argument('--dataset_origin', default='synthetic', type=str) # real / synthetic
