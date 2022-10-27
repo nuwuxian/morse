@@ -13,7 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--lr', type=float, default=1e-3) # 1e-3 for malware-real, 2e-4 for malware-syn
+parser.add_argument('--lr', type=float, default=1e-3) 
 parser.add_argument('--batch_size', type=int, default=128)
 
 parser.add_argument('--momentum', type=float, default=0.9)
