@@ -144,10 +144,9 @@ if args.optimizer == 'adam':
 else:
     optimizer = torch.optim.SGD(model.parameters(), args.lr, momentum=args.momentum,
                                 weight_decay=args.weight_decay, nesterov=args.nesterov)
-# Cosin Learning Rates
+
 # malware_real: [10, 60, 90], gamma = 0.3, batch_norm=nn.BatchNorm1d
-# malware_syn: [60, 80], gamma = 0.5, batch_norm=nn.BatchNorm1d, [30, 60], gamma=0.3 
-# intrusion: [10, 60], gamma = 0.1, batch_norm=None
+# malware_syn: [5, 30, 60], gamma = 0.3 | [30, 60], gamma = 0.1
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
             milestones=[5, 30, 60], gamma=0.3, last_epoch=-1) 
 
