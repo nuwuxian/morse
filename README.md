@@ -2,7 +2,7 @@
 This repo contains the code for the paper titled "From Grim Reality to Practical Solution: Malware Classification in Real-World Noise".
 
 ## Requirement
-This codebase is written for ```python3.7```. The requirement of our method is listed in ```requirements.txt``` under the morse folder.
+This codebase is written for ```python3.7```. The requirement of our method is listed in ```requirements.txt```.
 
 ## Code Structure and instructions
 ### Basics
