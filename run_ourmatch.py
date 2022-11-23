@@ -29,7 +29,7 @@ parser.add_argument('--dataset', type = str, help = 'mnist, cifar10, cifar100, o
 
 parser.add_argument('--epoch', type=int, default=100) # 140 for malware-real, 100 for malware-syn
 parser.add_argument('--warmup', type=int, default=5) # 5 for malware-real, 10 for malware-syn
-parser.add_argument('--optimizer', type = str, default='adam')  # adam for malware-real, sgd for malware-syn
+parser.add_argument('--optimizer', type = str, default='adam')  
 parser.add_argument('--cuda', type = int, default=2)
 parser.add_argument('--num_class', type = int, default=10) # 12 for malware-real, 10 for malware-syn
 
@@ -39,7 +39,7 @@ parser.add_argument('--gpu_index', type=int, default=0)
 
 # noise_setting | imbalanced setting
 parser.add_argument('--noise_rate', type = float, help = 'corruption rate, shouxld be less than 1', default = 0.6)
-parser.add_argument('--noise_type', type = str,  default='imb_step_0.05') # none for malware-real, imb_step_0.1 for malware-syn
+parser.add_argument('--noise_type', type = str,  default='imb_step_0.05') # none for malware-real
 parser.add_argument('--imb_type', type = str, default='step') # none for malware-real, step for malware-syn
 parser.add_argument('--imb_ratio', type = float, default=0.05)
 
@@ -149,7 +149,7 @@ else:
 # malware_syn: [5, 30, 60], gamma = 0.3 | [30, 60], gamma = 0.1
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
             milestones=[5, 30, 60], gamma=0.3, last_epoch=-1) 
-
+# useless
 dist = [0.14, 0.15, 0.15, 0.12, 0.15, 0.09, 0.01, 0.12, 0.03, 0.02, 0.01, 0.01]
 
 with torch.cuda.device(args.gpu_index):
