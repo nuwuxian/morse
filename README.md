@@ -7,10 +7,9 @@ This codebase is written for ```python3.7```. The requirement of our method is l
 ## Code Structure and instructions
 ### Basics
 - Our method is implemented in the file `our_match.py`
-- The eight baselines are in `baselines`. Note that in subfolder `baselines/NADAP`, it include three baseline methods: GCE (`gce.py`), Bootstap (`bootstrap.py`) and Noise-adaption (`main.py`). 
 
 ### Data
-- The `data` folder contains both the real-world and synthetic dataset. 
+- The `data` folder contains both the real-world and synthetic dataset. You could download the dataset from the google drive https://drive.google.com/drive/folders/1A6WtBmxGUAZJVjHmF2Zl99wwXCCNHKwA. 
 ## Training
 - Code for training MORSE is in the following file: `run_ourmatch.py`.
 ```
@@ -32,5 +31,3 @@ arguments:
   --reweight_start   starting reweighting epoch
   --dataset_origin   dataset for training (i.e., either the synthetic or real-world dataset)
 ```
-
-
