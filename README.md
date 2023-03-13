@@ -1,4 +1,4 @@
-# CCS_NoiseLearning
+# MORSE
 This repo contains the code for the paper titled "From Grim Reality to Practical Solution: Malware Classification in Real-World Noise".
 
 ## Requirement
