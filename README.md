@@ -27,7 +27,7 @@ arguments:
   --noise_type       noise type of the dataset
   --imb_type         imbalance type of the dataset (either none or step)
   --imb_ratio        imbalance ratio of the dataset (i.e., 0.05/0.01 in the synthetic dataset)
-  --threshold        pseudo label threshold (i.e., 0.40 in the real-world dataset)
+  --threshold        pseudo label threshold (i.e., 0.95 in the real-world dataset)
   --reweight_start   starting reweighting epoch
   --dataset_origin   dataset for training (i.e., either the synthetic or real-world dataset)
 ```
