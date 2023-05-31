@@ -9,7 +9,7 @@ This codebase is written for ```python3.7```. The requirement of our method is l
 - Our method is implemented in the file `our_match.py`
 
 ### Data
-- You could download the dataset from google drive https://drive.google.com/drive/folders/1A6WtBmxGUAZJVjHmF2Zl99wwXCCNHKwA (i.e., include both the synthetic dataset and real-world dataset) and put them in the `data` folder. 
+- You could download the dataset from google drive https://drive.google.com/drive/folders/1A6WtBmxGUAZJVjHmF2Zl99wwXCCNHKwA (i.e., include both the synthetic dataset and real-world PE malware dataset) and put them in the `data` folder. 
 ## Training
 - Code for training MORSE is in the following file: `run_ourmatch.py`.
 ```
@@ -22,12 +22,12 @@ arguments:
   --batch_size       batch size (default value is the value in the file `run_ourmatch.py`)
   --input_dim        extracted malware feature dimension (i.e., 2381 in the synthetic dataset)
   --epoch            total training epochs
-  --warmup           warmup period
+  --warmup           warmup period (i.e., 10 in the synthetic dataset and 5 in the PE malware dataset)
   --noise_rate       noise ratio of the dataset
   --noise_type       noise type of the dataset
   --imb_type         imbalance type of the dataset (either none or step)
   --imb_ratio        imbalance ratio of the dataset (i.e., 0.05/0.01 in the synthetic dataset)
-  --threshold        pseudo label threshold (i.e., 0.95 in the real-world dataset)
+  --threshold        pseudo label threshold (i.e., 0.40 in the synthetic dataset and 0.95 in the PE malware dataset)
   --reweight_start   starting reweighting epoch
   --dataset_origin   dataset for training (i.e., either the synthetic or real-world dataset)
 ```

@@ -145,10 +145,16 @@ else:
     optimizer = torch.optim.SGD(model.parameters(), args.lr, momentum=args.momentum,
                                 weight_decay=args.weight_decay, nesterov=args.nesterov)
 
+# Dataset specific
 # malware_real: [10, 60, 90], gamma = 0.3
-# malware_syn: noise-0.6-imb-20 [5, 30, 60], gamma = 0.3; other setting [30, 60], gamma = 0.3
+# malware_syn: noise-0.6-imb-20 [5, 30, 60], gamma = 0.3; other settings: [30, 60], gamma = 0.3
+if args.dataset_origin == 'synthetic':
+    milestones = [5, 30, 60] if args.noise_type == 'imb_step_20' and args.noise_rate == 0.6 else [30, 60]
+else:
+    milestones = [10, 60, 90]
+
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-            milestones=[5, 30, 60], gamma=0.3, last_epoch=-1) 
+            milestones=milestones, gamma=0.3, last_epoch=-1) 
 # useless
 dist = [0.14, 0.15, 0.15, 0.12, 0.15, 0.09, 0.01, 0.12, 0.03, 0.02, 0.01, 0.01]
 
