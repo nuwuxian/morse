@@ -9,7 +9,8 @@ This codebase is written for ```python3.7```. The requirement of our method is l
 - Our method is implemented in the file `our_match.py`
 
 ### Data
-- You could download the dataset from google drive https://drive.google.com/drive/folders/1A6WtBmxGUAZJVjHmF2Zl99wwXCCNHKwA (i.e., include both the synthetic dataset and real-world PE malware dataset) and put them in the `data` folder. 
+- You could download the dataset from google drive https://tinyurl.com/skvw9n7j (i.e., include both the synthetic dataset and real-world PE malware dataset) and put them in the `data` folder.
+
 ## Training
 - Code for training MORSE is in the following file: `run_ourmatch.py`.
 ```
