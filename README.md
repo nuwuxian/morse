@@ -1,6 +1,17 @@
 # MORSE
 This repo contains the code for the S&P 23 paper titled "From Grim Reality to Practical Solution: Malware Classification in Real-World Noise".
 
+Paper citation:
+```
+@inproceedings{wu2023grim,
+  title={From Grim Reality to Practical Solution: Malware Classification in Real-World Noise},
+  author={Wu, Xian and Guo, Wenbo and Yan, Jia and Coskun, Baris and Xing, Xinyu},
+  booktitle={2023 IEEE Symposium on Security and Privacy (SP)},
+  year={2023},
+}
+
+```
+
 ## Requirement
 This codebase is written for ```python3.7```. The requirement of our method is listed in ```requirements.txt```.
 
