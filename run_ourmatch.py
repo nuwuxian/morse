@@ -57,8 +57,8 @@ parser.add_argument('--use_pretrain', default=True, type=bool)
 parser.add_argument('--clean_method', default='confidence', type=str)
 parser.add_argument('--clean_theta', default=0.95, type=float)
 # imbalance method
-parser.add_argument('--imb_method', default='reweight', type=str)   # resample / mixup / logits/ reweight
-parser.add_argument('--reweight_start', default=20, type=int) # 40 for malware-syn
+parser.add_argument('--imb_method', default='reweight', type=str)   # default is 're-weight'
+parser.add_argument('--reweight_start', default=20, type=int) # 40 for malware-real
 # mixup alpha
 parser.add_argument('--alpha', default=10, type=int)
 parser.add_argument('--use_true_distribution', default=False, type=bool)
