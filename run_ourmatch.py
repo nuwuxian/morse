@@ -58,7 +58,7 @@ parser.add_argument('--clean_method', default='confidence', type=str)
 parser.add_argument('--clean_theta', default=0.95, type=float)
 # imbalance method
 parser.add_argument('--imb_method', default='reweight', type=str)   # resample / mixup / logits/ reweight
-parser.add_argument('--reweight_start', default=20, type=int)
+parser.add_argument('--reweight_start', default=20, type=int) # 40 for malware-syn
 # mixup alpha
 parser.add_argument('--alpha', default=10, type=int)
 parser.add_argument('--use_true_distribution', default=False, type=bool)
@@ -72,7 +72,7 @@ parser.add_argument('--use_scl', default=False, type=bool)
 parser.add_argument('--lambda-s', default=0.1, type=float)
 
 parser.add_argument('--use_proto', default=False, type=bool)
-parser.add_argument('--use_hard_labels', default=False, type=bool)
+parser.add_argument('--use_hard_labels', default=False, type=bool) # soft version is better than hard label
 parser.add_argument('--use_dynamic_threshold', default=False, type=bool)
 parser.add_argument('--epsilon', default=0.95, type=float) # 0.7 for malware-real
 
@@ -149,7 +149,7 @@ else:
 # malware_real: [10, 60, 90], gamma = 0.3
 # malware_syn: noise-0.6-imb-20 [5, 30, 60], gamma = 0.3; other settings: [30, 60], gamma = 0.3
 if args.dataset_origin == 'synthetic':
-    milestones = [5, 30, 60] if args.noise_type == 'imb_step_20' and args.noise_rate == 0.6 else [30, 60]
+    milestones = [5, 30, 60] if args.noise_type == 'imb_step_0.05' and args.noise_rate == 0.6 else [30, 60]
 else:
     milestones = [10, 60, 90]
 
