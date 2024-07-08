@@ -20,7 +20,7 @@ This codebase is written for ```python3.7```. The requirement of our method is l
 - Our method is implemented in the file `our_match.py`.
 
 ### Data
-- You could download the dataset from google drive https://tinyurl.com/skvw9n7j (i.e., include both the synthetic dataset and real-world PE malware dataset) and put them in the `data` folder.
+- You can download the dataset from google drive https://tinyurl.com/skvw9n7j (i.e., include both the synthetic dataset and real-world PE malware dataset, along wih the vendor labels in the PE real-world malware dataset) and put them in the `data` folder.
 
 ## Training
 - Code for training MORSE is in the following file: `run_ourmatch.py`.
@@ -43,3 +43,4 @@ arguments:
   --reweight_start   starting reweighting epoch
   --dataset_origin   dataset for training (i.e., either the synthetic or real-world dataset)
 ```
+- Run `sh run.sh` to train with 6 different seeds in parallel. The results will be saved into the `out_dir` specified in `run_ourmatch.py`. After training is complete, evaluate the results by running `python plot.py`. 
